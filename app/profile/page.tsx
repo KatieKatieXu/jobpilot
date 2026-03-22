@@ -18,7 +18,6 @@ const ROLE_TYPES = [
 const WORK_STYLES = ['Remote', 'Hybrid', 'On-site'];
 
 interface ProfileData {
-  // Step 1
   fullName: string;
   currentTitle: string;
   yearsExperience: string;
@@ -26,12 +25,10 @@ interface ProfileData {
   linkedinUrl: string;
   portfolioUrl: string;
   githubUrl: string;
-  // Step 2
   workExperience: string;
   topSkills: string;
   differentiation: string;
   sideProjects: string;
-  // Step 3
   targetCompensation: string;
   targetRoles: string[];
   workStyle: string[];
@@ -88,21 +85,33 @@ Awards: Grace Hopper 2018 Co-Speaker, Be the Change Leadership Award`,
   openToRelocation: 'no',
 };
 
+// Detect if profile looks meaningfully filled (beyond the bare defaults)
+function isProfileSaved(p: ProfileData | null): p is ProfileData {
+  if (!p) return false;
+  return !!(p.fullName && p.currentTitle);
+}
+
 export default function ProfilePage() {
   const router = useRouter();
+  const [viewMode, setViewMode] = useState<'summary' | 'edit'>('edit');
   const [step, setStep] = useState(1);
   const [profile, setProfile] = useState<ProfileData>(defaultProfile);
+  const [hasExistingProfile, setHasExistingProfile] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem('jobpilot_profile');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // Merge saved data over defaults so new fields are pre-filled
-        setProfile({ ...defaultProfile, ...parsed });
+        const merged = { ...defaultProfile, ...parsed };
+        setProfile(merged);
+        if (isProfileSaved(merged)) {
+          setHasExistingProfile(true);
+          setViewMode('summary');
+        }
       } catch {}
     }
-    // If no saved profile, defaultProfile is already pre-filled with Katie's data
   }, []);
 
   const update = (field: keyof ProfileData, value: string | string[]) => {
@@ -127,22 +136,214 @@ export default function ProfilePage() {
     }));
   };
 
+  const handleSave = () => {
+    localStorage.setItem('jobpilot_profile', JSON.stringify(profile));
+    setHasExistingProfile(true);
+    setViewMode('summary');
+  };
+
   const handleFinish = () => {
     localStorage.setItem('jobpilot_profile', JSON.stringify(profile));
+    setHasExistingProfile(true);
+    setViewMode('summary');
     router.push('/dashboard');
+  };
+
+  const clearProfile = () => {
+    localStorage.removeItem('jobpilot_profile');
+    setProfile(defaultProfile);
+    setHasExistingProfile(false);
+    setViewMode('edit');
+    setStep(1);
+    setShowClearConfirm(false);
   };
 
   const inputClass =
     'w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition text-sm';
   const labelClass = 'block text-sm font-medium text-slate-300 mb-1.5';
 
+  // ── Summary view for returning users ─────────────────────────────────────
+  if (viewMode === 'summary') {
+    return (
+      <AppLayout>
+        <div className="max-w-2xl mx-auto">
+          <div className="mb-8 flex items-start justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-white">Your Profile</h1>
+              <p className="text-slate-400 mt-1">Looking good — your profile is saved and ready.</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => { setViewMode('edit'); setStep(1); }}
+                className="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold rounded-lg transition"
+              >
+                ✏️ Edit Profile
+              </button>
+              {showClearConfirm ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400">Sure?</span>
+                  <button
+                    onClick={() => setShowClearConfirm(false)}
+                    className="text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 transition"
+                  >No</button>
+                  <button
+                    onClick={clearProfile}
+                    className="text-xs px-2 py-1 rounded bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-400 transition"
+                  >Yes, clear</button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowClearConfirm(true)}
+                  className="px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-white text-sm rounded-lg transition"
+                >
+                  🗑 Clear
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {/* Identity card */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+              <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">About You</h2>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-slate-500 text-xs mb-0.5">Name</p>
+                  <p className="text-white font-medium">{profile.fullName || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs mb-0.5">Title</p>
+                  <p className="text-white">{profile.currentTitle || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs mb-0.5">Experience</p>
+                  <p className="text-white">{profile.yearsExperience ? `${profile.yearsExperience} years` : '—'}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs mb-0.5">Location</p>
+                  <p className="text-white">{profile.location || '—'}</p>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-3 text-sm">
+                {profile.linkedinUrl && (
+                  <a href={profile.linkedinUrl} target="_blank" rel="noreferrer" className="text-violet-400 hover:text-violet-300 transition text-xs">
+                    🔗 LinkedIn
+                  </a>
+                )}
+                {profile.portfolioUrl && (
+                  <a href={profile.portfolioUrl} target="_blank" rel="noreferrer" className="text-violet-400 hover:text-violet-300 transition text-xs">
+                    🌐 Portfolio
+                  </a>
+                )}
+                {profile.githubUrl && (
+                  <a href={profile.githubUrl} target="_blank" rel="noreferrer" className="text-violet-400 hover:text-violet-300 transition text-xs">
+                    🐙 GitHub
+                  </a>
+                )}
+              </div>
+            </div>
+
+            {/* Background card */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+              <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Background</h2>
+              <div className="space-y-4 text-sm">
+                {profile.topSkills && (
+                  <div>
+                    <p className="text-slate-500 text-xs mb-1">Top Skills</p>
+                    <p className="text-slate-200">{profile.topSkills}</p>
+                  </div>
+                )}
+                {profile.differentiation && (
+                  <div>
+                    <p className="text-slate-500 text-xs mb-1">What Makes You Different</p>
+                    <p className="text-slate-200 leading-relaxed">{profile.differentiation}</p>
+                  </div>
+                )}
+                {profile.workExperience && (
+                  <div>
+                    <p className="text-slate-500 text-xs mb-1">Work Experience</p>
+                    <pre className="text-slate-300 text-xs whitespace-pre-wrap font-mono leading-relaxed bg-slate-800/50 rounded-lg p-3 max-h-40 overflow-y-auto">
+                      {profile.workExperience}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Goals card */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+              <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Goals</h2>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-slate-500 text-xs mb-1">Target Compensation</p>
+                  <p className="text-white font-medium">{profile.targetCompensation || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs mb-1">Work Style</p>
+                  <p className="text-white">{Array.isArray(profile.workStyle) ? profile.workStyle.join(', ') : profile.workStyle || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs mb-1">Open to Relocation</p>
+                  <p className="text-white capitalize">{profile.openToRelocation || '—'}</p>
+                </div>
+              </div>
+              {profile.targetRoles?.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-slate-500 text-xs mb-2">Target Roles</p>
+                  <div className="flex flex-wrap gap-2">
+                    {profile.targetRoles.map((r) => (
+                      <span key={r} className="px-2.5 py-1 bg-violet-600/20 border border-violet-600/30 text-violet-300 text-xs rounded-lg">{r}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {profile.specialRequests && (
+                <div className="mt-4">
+                  <p className="text-slate-500 text-xs mb-1">Special Requests</p>
+                  <p className="text-slate-300 text-sm">{profile.specialRequests}</p>
+                </div>
+              )}
+            </div>
+
+            {/* CTA */}
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => { setViewMode('edit'); setStep(1); }}
+                className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-sm font-medium rounded-xl transition"
+              >
+                ✏️ Edit Profile
+              </button>
+              <button
+                onClick={() => router.push('/jobs')}
+                className="flex-1 py-3 bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold rounded-xl transition"
+              >
+                Browse Jobs →
+              </button>
+            </div>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  // ── Edit / setup flow ─────────────────────────────────────────────────────
   return (
     <AppLayout>
       <div className="max-w-2xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-white">Your Profile</h1>
-          <p className="text-slate-400 mt-1">Tell us about yourself so we can find the best matches.</p>
+        <div className="mb-8 flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-white">Your Profile</h1>
+            <p className="text-slate-400 mt-1">Tell us about yourself so we can find the best matches.</p>
+          </div>
+          {hasExistingProfile && (
+            <button
+              onClick={() => setViewMode('summary')}
+              className="text-sm text-slate-400 hover:text-violet-400 transition"
+            >
+              ← Back to summary
+            </button>
+          )}
         </div>
 
         {/* Step indicator */}
@@ -321,7 +522,7 @@ export default function ProfilePage() {
                       className={`px-6 py-2 rounded-lg text-sm font-medium border transition capitalize ${
                         profile.openToRelocation === opt
                           ? 'bg-violet-600 border-violet-500 text-white'
-                          : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600'
+                          : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-606'
                       }`}
                     >
                       {opt}
@@ -335,27 +536,35 @@ export default function ProfilePage() {
           {/* Navigation */}
           <div className="flex justify-between mt-8 pt-6 border-t border-slate-800">
             <button
-              onClick={() => setStep((s) => s - 1)}
-              disabled={step === 1}
-              className="px-5 py-2.5 rounded-lg text-sm font-medium border border-slate-700 text-slate-400 hover:text-white hover:border-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition"
+              onClick={() => step > 1 ? setStep((s) => s - 1) : setViewMode('summary')}
+              className="px-5 py-2.5 rounded-lg text-sm font-medium border border-slate-700 text-slate-400 hover:text-white hover:border-slate-600 transition"
             >
-              ← Back
+              {step > 1 ? '← Back' : hasExistingProfile ? '← Summary' : '← Back'}
             </button>
-            {step < 3 ? (
+            <div className="flex gap-3">
+              {/* Mid-flow save */}
               <button
-                onClick={() => setStep((s) => s + 1)}
-                className="px-6 py-2.5 rounded-lg text-sm font-semibold bg-violet-600 hover:bg-violet-500 text-white transition"
+                onClick={handleSave}
+                className="px-5 py-2.5 rounded-lg text-sm font-medium border border-slate-700 text-slate-400 hover:text-white hover:border-slate-600 transition"
               >
-                Next →
+                Save
               </button>
-            ) : (
-              <button
-                onClick={handleFinish}
-                className="px-6 py-2.5 rounded-lg text-sm font-semibold bg-violet-600 hover:bg-violet-500 text-white transition"
-              >
-                Save Profile ✓
-              </button>
-            )}
+              {step < 3 ? (
+                <button
+                  onClick={() => setStep((s) => s + 1)}
+                  className="px-6 py-2.5 rounded-lg text-sm font-semibold bg-violet-600 hover:bg-violet-500 text-white transition"
+                >
+                  Next →
+                </button>
+              ) : (
+                <button
+                  onClick={handleFinish}
+                  className="px-6 py-2.5 rounded-lg text-sm font-semibold bg-violet-600 hover:bg-violet-500 text-white transition"
+                >
+                  Save Profile ✓
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

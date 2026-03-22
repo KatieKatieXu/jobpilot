@@ -1,11 +1,20 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import type { Suggestion } from '../api/analyze-resume/route';
 
-type Step = 'upload' | 'review' | 'export';
+type Step = 'saved' | 'upload' | 'review' | 'export';
 type Category = 'all' | 'impact' | 'ats' | 'clarity' | 'gaps' | 'formatting';
+
+const STORAGE_KEY = 'jobpilot_resume_report';
+
+interface SavedReport {
+  revisedText: string;
+  appliedCount: number;
+  approvedSuggestions: Suggestion[];
+  savedAt: string; // ISO date
+}
 
 const CATEGORY_COLORS: Record<string, string> = {
   impact: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
@@ -32,6 +41,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 export default function ResumePage() {
   const [step, setStep] = useState<Step>('upload');
+  const [savedReport, setSavedReport] = useState<SavedReport | null>(null);
   const [resumeText, setResumeText] = useState('');
   const [pastedText, setPastedText] = useState('');
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -45,9 +55,47 @@ export default function ResumePage() {
   const [fileName, setFileName] = useState('');
   const [revisedText, setRevisedText] = useState('');
   const [appliedCount, setAppliedCount] = useState(0);
+  const [approvedSuggestions, setApprovedSuggestionsState] = useState<Suggestion[]>([]);
   const [copied, setCopied] = useState(false);
   const [synced, setSynced] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load saved report on mount
+  useEffect(() => {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      try {
+        const report: SavedReport = JSON.parse(raw);
+        setSavedReport(report);
+        setStep('saved');
+      } catch {}
+    }
+  }, []);
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  const persistReport = (report: SavedReport) => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(report));
+    setSavedReport(report);
+  };
+
+  const clearReport = () => {
+    localStorage.removeItem(STORAGE_KEY);
+    setSavedReport(null);
+    setStep('upload');
+    setResumeText('');
+    setPastedText('');
+    setSuggestions([]);
+    setDecisions({});
+    setRevisedText('');
+    setAppliedCount(0);
+    setApprovedSuggestionsState([]);
+    setFileName('');
+    setError('');
+    setFilterCategory('all');
+    setSynced(false);
+    setShowClearConfirm(false);
+  };
 
   // ── Step 1: file upload ──────────────────────────────────────────────────
   const handleFile = useCallback(async (file: File) => {
@@ -121,25 +169,35 @@ export default function ResumePage() {
     });
   };
 
-  const approvedSuggestions = suggestions.filter((s) => decisions[s.id] === 'approved');
+  const computedApproved = suggestions.filter((s) => decisions[s.id] === 'approved');
   const filteredSuggestions = filterCategory === 'all'
     ? suggestions
     : suggestions.filter((s) => s.category === filterCategory);
 
   const applyChanges = async () => {
-    if (approvedSuggestions.length === 0) return;
+    if (computedApproved.length === 0) return;
     setExporting(true);
     setError('');
     try {
       const res = await fetch('/api/export-resume', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ originalText: resumeText, approvedSuggestions }),
+        body: JSON.stringify({ originalText: resumeText, approvedSuggestions: computedApproved }),
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Export failed');
       setRevisedText(data.revisedText);
       setAppliedCount(data.appliedCount);
+      setApprovedSuggestionsState(computedApproved);
+
+      // Persist the report so it shows on next visit
+      persistReport({
+        revisedText: data.revisedText,
+        appliedCount: data.appliedCount,
+        approvedSuggestions: computedApproved,
+        savedAt: new Date().toISOString(),
+      });
+
       setStep('export');
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Export failed');
@@ -149,14 +207,14 @@ export default function ResumePage() {
   };
 
   // ── Step 3: export ───────────────────────────────────────────────────────
-  const copyToClipboard = async () => {
-    await navigator.clipboard.writeText(revisedText);
+  const copyToClipboard = async (text: string) => {
+    await navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const downloadTxt = () => {
-    const blob = new Blob([revisedText], { type: 'text/plain' });
+  const downloadTxt = (text: string) => {
+    const blob = new Blob([text], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -165,11 +223,11 @@ export default function ResumePage() {
     URL.revokeObjectURL(url);
   };
 
-  const syncToProfile = () => {
+  const syncToProfile = (text: string) => {
     try {
       const saved = localStorage.getItem('jobpilot_profile');
       const profile = saved ? JSON.parse(saved) : {};
-      profile.workExperience = revisedText;
+      profile.workExperience = text;
       localStorage.setItem('jobpilot_profile', JSON.stringify(profile));
       setSynced(true);
       setTimeout(() => setSynced(false), 3000);
@@ -178,19 +236,112 @@ export default function ResumePage() {
     }
   };
 
-  const startOver = () => {
-    setStep('upload');
-    setResumeText('');
-    setPastedText('');
-    setSuggestions([]);
-    setDecisions({});
-    setRevisedText('');
-    setAppliedCount(0);
-    setFileName('');
-    setError('');
-    setFilterCategory('all');
-    setSynced(false);
-  };
+  // ── Shared export panel (used by both 'saved' and 'export' steps) ────────
+  const ExportPanel = ({ report, onNewAnalysis }: { report: { revisedText: string; appliedCount: number; approvedSuggestions: Suggestion[]; savedAt?: string }; onNewAnalysis?: () => void }) => (
+    <div className="space-y-6">
+      {/* Success header */}
+      <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-6 flex items-start gap-4">
+        <div className="text-4xl">🎉</div>
+        <div className="flex-1">
+          <h2 className="text-xl font-bold text-white">{report.appliedCount} changes applied</h2>
+          <p className="text-slate-400 text-sm mt-1">Your resume has been revised and optimized.</p>
+          {report.savedAt && (
+            <p className="text-slate-500 text-xs mt-1">
+              Last updated {new Date(report.savedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </p>
+          )}
+        </div>
+        {/* Clear / restart */}
+        <div className="shrink-0">
+          {showClearConfirm ? (
+            <div className="flex flex-col items-end gap-2">
+              <p className="text-xs text-slate-400">Clear this report?</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowClearConfirm(false)}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={clearReport}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-400 transition"
+                >
+                  Yes, clear
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowClearConfirm(true)}
+              className="text-xs px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-white transition"
+            >
+              🗑 Clear & restart
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Action buttons */}
+      <div className="flex flex-wrap gap-3">
+        <button
+          onClick={() => copyToClipboard(report.revisedText)}
+          className="flex items-center gap-2 px-5 py-3 bg-violet-600 hover:bg-violet-500 text-white font-medium rounded-xl transition-all"
+        >
+          {copied ? '✅ Copied!' : '📋 Copy to Clipboard'}
+        </button>
+        <button
+          onClick={() => downloadTxt(report.revisedText)}
+          className="flex items-center gap-2 px-5 py-3 bg-slate-700 hover:bg-slate-600 text-white font-medium rounded-xl transition-all"
+        >
+          ⬇️ Download as .txt
+        </button>
+        <button
+          onClick={() => syncToProfile(report.revisedText)}
+          className={`flex items-center gap-2 px-5 py-3 font-medium rounded-xl transition-all border ${
+            synced
+              ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
+              : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-300 hover:text-white'
+          }`}
+        >
+          {synced ? '✅ Synced to Profile!' : '🔗 Sync to Profile'}
+        </button>
+        {onNewAnalysis && (
+          <button
+            onClick={onNewAnalysis}
+            className="flex items-center gap-2 px-5 py-3 bg-transparent hover:bg-slate-800 text-slate-400 hover:text-white font-medium rounded-xl transition-all border border-slate-700"
+          >
+            🔍 Analyze New Resume
+          </button>
+        )}
+      </div>
+
+      {/* Changes summary */}
+      {report.approvedSuggestions.length > 0 && (
+        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+          <h3 className="text-sm font-semibold text-slate-300 mb-3">Changes Summary</h3>
+          <div className="space-y-2">
+            {report.approvedSuggestions.map((s) => (
+              <div key={s.id} className="flex items-start gap-2 text-sm">
+                <span className={`mt-0.5 text-xs px-1.5 py-0.5 rounded border capitalize shrink-0 ${CATEGORY_COLORS[s.category]}`}>
+                  {s.category}
+                </span>
+                <span className="text-slate-400">{s.section} — {s.reason}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Revised text preview */}
+      <div>
+        <h3 className="text-sm font-semibold text-slate-300 mb-3">Revised Resume</h3>
+        <pre className="bg-slate-900 border border-slate-700 rounded-xl p-6 text-slate-300 text-sm whitespace-pre-wrap leading-relaxed font-mono overflow-auto max-h-[600px]">
+          {report.revisedText}
+        </pre>
+      </div>
+    </div>
+  );
 
   // ── Render ───────────────────────────────────────────────────────────────
   return (
@@ -202,27 +353,30 @@ export default function ResumePage() {
           <p className="text-slate-400">AI-powered resume analysis and optimization for senior design & AI roles.</p>
         </div>
 
-        {/* Step indicator */}
-        <div className="flex items-center gap-2 mb-8">
-          {(['upload', 'review', 'export'] as Step[]).map((s, i) => {
-            const labels = ['Upload', 'Review', 'Export'];
-            const isActive = step === s;
-            const isPast = (['upload', 'review', 'export'] as Step[]).indexOf(step) > i;
-            return (
-              <div key={s} className="flex items-center gap-2">
-                {i > 0 && <div className={`h-px w-8 ${isPast ? 'bg-violet-500' : 'bg-slate-700'}`} />}
-                <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium transition-all ${
-                  isActive ? 'bg-violet-600 text-white' : isPast ? 'bg-violet-600/30 text-violet-400' : 'bg-slate-800 text-slate-500'
-                }`}>
-                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
-                    isActive ? 'bg-white/20' : isPast ? 'bg-violet-500/30' : 'bg-slate-700'
-                  }`}>{i + 1}</span>
-                  {labels[i]}
+        {/* Step indicator — only show for upload/review/export flow */}
+        {step !== 'saved' && (
+          <div className="flex items-center gap-2 mb-8">
+            {(['upload', 'review', 'export'] as Exclude<Step, 'saved'>[]).map((s, i) => {
+              const labels = ['Upload', 'Review', 'Export'];
+              const isActive = step === s;
+              const stepsOrder = ['upload', 'review', 'export'];
+              const isPast = stepsOrder.indexOf(step) > i;
+              return (
+                <div key={s} className="flex items-center gap-2">
+                  {i > 0 && <div className={`h-px w-8 ${isPast ? 'bg-violet-500' : 'bg-slate-700'}`} />}
+                  <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium transition-all ${
+                    isActive ? 'bg-violet-600 text-white' : isPast ? 'bg-violet-600/30 text-violet-400' : 'bg-slate-800 text-slate-500'
+                  }`}>
+                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
+                      isActive ? 'bg-white/20' : isPast ? 'bg-violet-500/30' : 'bg-slate-700'
+                    }`}>{i + 1}</span>
+                    {labels[i]}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Error banner */}
         {error && (
@@ -231,9 +385,30 @@ export default function ResumePage() {
           </div>
         )}
 
+        {/* ── SAVED REPORT (returning user) ──────────────────────────────── */}
+        {step === 'saved' && savedReport && (
+          <ExportPanel
+            report={savedReport}
+            onNewAnalysis={() => {
+              // Go to upload but keep the report in storage until they explicitly clear
+              setStep('upload');
+            }}
+          />
+        )}
+
         {/* ── STEP 1: UPLOAD ─────────────────────────────────────────── */}
         {step === 'upload' && (
           <div className="space-y-6">
+            {/* Back to saved report link */}
+            {savedReport && (
+              <button
+                onClick={() => setStep('saved')}
+                className="flex items-center gap-2 text-sm text-slate-400 hover:text-violet-400 transition"
+              >
+                ← Back to your last report
+              </button>
+            )}
+
             {/* Drop zone */}
             <div
               onClick={() => !loading && fileInputRef.current?.click()}
@@ -315,7 +490,7 @@ export default function ResumePage() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-bold text-white">{suggestions.length} suggestions found</h2>
-                <p className="text-slate-400 text-sm mt-0.5">{approvedSuggestions.length} approved · {suggestions.filter(s => decisions[s.id] === 'skipped').length} skipped</p>
+                <p className="text-slate-400 text-sm mt-0.5">{computedApproved.length} approved · {suggestions.filter(s => decisions[s.id] === 'skipped').length} skipped</p>
               </div>
               <button
                 onClick={approveAll}
@@ -403,7 +578,7 @@ export default function ResumePage() {
                         <textarea
                           className="w-full bg-transparent text-emerald-300 text-sm leading-relaxed resize-none focus:outline-none placeholder-emerald-800"
                           rows={Math.max(2, s.revised.split('\n').length)}
-                          value={decisions[s.id] === 'approved' || decisions[s.id] === null ? (s as Suggestion & { _edited?: string })._edited ?? s.revised : s.revised}
+                          value={(s as Suggestion & { _edited?: string })._edited ?? s.revised}
                           onChange={(e) => {
                             const val = e.target.value;
                             setSuggestions((prev) =>
@@ -440,13 +615,13 @@ export default function ResumePage() {
               </button>
               <button
                 onClick={applyChanges}
-                disabled={approvedSuggestions.length === 0 || exporting}
+                disabled={computedApproved.length === 0 || exporting}
                 className="flex-1 py-3 bg-violet-600 hover:bg-violet-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-semibold rounded-xl transition-all duration-150 flex items-center justify-center gap-2"
               >
                 {exporting ? (
                   <><span className="animate-spin">⟳</span> Applying changes…</>
                 ) : (
-                  `Apply ${approvedSuggestions.length} Approved Changes →`
+                  `Apply ${computedApproved.length} Approved Changes →`
                 )}
               </button>
             </div>
@@ -455,71 +630,9 @@ export default function ResumePage() {
 
         {/* ── STEP 3: EXPORT ─────────────────────────────────────────── */}
         {step === 'export' && (
-          <div className="space-y-6">
-            {/* Success header */}
-            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-6 flex items-center gap-4">
-              <div className="text-4xl">🎉</div>
-              <div>
-                <h2 className="text-xl font-bold text-white">{appliedCount} changes applied</h2>
-                <p className="text-slate-400 text-sm mt-1">Your resume has been revised and optimized.</p>
-              </div>
-            </div>
-
-            {/* Action buttons */}
-            <div className="flex flex-wrap gap-3">
-              <button
-                onClick={copyToClipboard}
-                className="flex items-center gap-2 px-5 py-3 bg-violet-600 hover:bg-violet-500 text-white font-medium rounded-xl transition-all"
-              >
-                {copied ? '✅ Copied!' : '📋 Copy to Clipboard'}
-              </button>
-              <button
-                onClick={downloadTxt}
-                className="flex items-center gap-2 px-5 py-3 bg-slate-700 hover:bg-slate-600 text-white font-medium rounded-xl transition-all"
-              >
-                ⬇️ Download as .txt
-              </button>
-              <button
-                onClick={syncToProfile}
-                className={`flex items-center gap-2 px-5 py-3 font-medium rounded-xl transition-all border ${
-                  synced
-                    ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
-                    : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-300 hover:text-white'
-                }`}
-              >
-                {synced ? '✅ Synced to Profile!' : '🔗 Sync to Profile'}
-              </button>
-              <button
-                onClick={startOver}
-                className="flex items-center gap-2 px-5 py-3 bg-transparent hover:bg-slate-800 text-slate-400 hover:text-white font-medium rounded-xl transition-all border border-slate-700"
-              >
-                🔄 Start Over
-              </button>
-            </div>
-
-            {/* Diff summary */}
-            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
-              <h3 className="text-sm font-semibold text-slate-300 mb-3">Changes Summary</h3>
-              <div className="space-y-2">
-                {approvedSuggestions.map((s) => (
-                  <div key={s.id} className="flex items-start gap-2 text-sm">
-                    <span className={`mt-0.5 text-xs px-1.5 py-0.5 rounded border capitalize shrink-0 ${CATEGORY_COLORS[s.category]}`}>
-                      {s.category}
-                    </span>
-                    <span className="text-slate-400">{s.section} — {s.reason}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Revised text preview */}
-            <div>
-              <h3 className="text-sm font-semibold text-slate-300 mb-3">Revised Resume</h3>
-              <pre className="bg-slate-900 border border-slate-700 rounded-xl p-6 text-slate-300 text-sm whitespace-pre-wrap leading-relaxed font-mono overflow-auto max-h-[600px]">
-                {revisedText}
-              </pre>
-            </div>
-          </div>
+          <ExportPanel
+            report={{ revisedText, appliedCount, approvedSuggestions, savedAt: new Date().toISOString() }}
+          />
         )}
       </div>
     </AppLayout>

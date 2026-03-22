@@ -21,41 +21,171 @@ const seedJobs: Job[] = [
   {
     id: 1,
     company: 'Anthropic',
-    role: 'Product Designer',
-    salary: '$180–220K',
-    match: 95,
-    location: 'San Francisco, CA (Remote OK)',
-    posted: 'Mar 15, 2026',
-    companyOutlook: 'Anthropic raised $7.3B Series E, expanding product design team',
-    compatibility: 'Cognitive science + AI product experience is a direct match',
+    role: 'Design Engineer, Education Labs',
+    salary: '~$200–300K',
+    match: 97,
+    location: 'San Francisco / NYC',
+    posted: 'Mar 2026',
+    companyOutlook: '$61B+ valuation, defining AI safety. Education Labs = teaching people to use AI effectively.',
+    compatibility: 'Katie is literally already doing this — teaching people to use AI to build things is her content niche. UX + cognitive science + AI builder + educator = unicorn candidate.',
     url: 'https://anthropic.com/careers',
-    jobPostingUrl: 'https://boards.greenhouse.io/anthropic/jobs/product-designer',
+    jobPostingUrl: 'https://job-boards.greenhouse.io/anthropic/jobs/5097186008',
   },
   {
     id: 2,
     company: 'Figma',
-    role: 'Senior Product Designer',
-    salary: '$175–210K',
-    match: 88,
-    location: 'San Francisco, CA (Hybrid)',
-    posted: 'Mar 14, 2026',
-    companyOutlook: 'Figma growing post-Adobe acquisition block, doubling design team',
-    compatibility: '7+ yrs product design + design systems experience aligns perfectly',
+    role: 'Product Designer, AI Models',
+    salary: '$169–303K',
+    match: 95,
+    location: 'US Remote / SF / NYC',
+    posted: 'Mar 2026',
+    companyOutlook: '$12.5B+ valuation. AI Models team = teaching AI to be better design copilots.',
+    compatibility: 'Exceptional match — uses Figma daily, built Figma→MCP→Cursor pipeline, cognitive science background directly relevant to developing AI design principles.',
     url: 'https://figma.com/careers',
-    jobPostingUrl: 'https://boards.greenhouse.io/figma/jobs/senior-product-designer',
+    jobPostingUrl: 'https://job-boards.greenhouse.io/figma/jobs/5711913004',
   },
   {
     id: 3,
     company: 'OpenAI',
-    role: 'AI UX Designer',
-    salary: '$190–240K',
-    match: 91,
-    location: 'San Francisco, CA (Hybrid)',
-    posted: 'Mar 13, 2026',
-    companyOutlook: 'OpenAI at $157B valuation, aggressive product expansion',
-    compatibility: 'Solo AI app builder background rare among UX candidates',
+    role: 'Product Designer, ChatGPT',
+    salary: '~$200–350K',
+    match: 94,
+    location: 'San Francisco (Onsite)',
+    posted: 'Mar 2026',
+    companyOutlook: 'ChatGPT has 100M+ users, pre-IPO. Small design team = high ownership.',
+    compatibility: '4+ yrs shipping software, strong UX/UI, complex interaction design, AI-first thinking. PawPaw Story + cognitive science = perfect for AI interfaces.',
     url: 'https://openai.com/careers',
-    jobPostingUrl: 'https://openai.com/careers/ai-ux-designer',
+    jobPostingUrl: 'https://openai.com/careers/product-designer-chatgpt-san-francisco/',
+  },
+  {
+    id: 4,
+    company: 'Figma',
+    role: 'Product Designer, Design/Dev/AI Tools',
+    salary: '$169–303K',
+    match: 93,
+    location: 'US Remote / SF / NYC',
+    posted: 'Mar 2026',
+    companyOutlook: 'Core product team — Figma Editor, AI, Dev Tools. Values "design/development hybrid background."',
+    compatibility: '7+ yrs UX/UI, visual craft, interaction design, AI product experience. Builds apps with AI tools — exactly the hybrid they want.',
+    url: 'https://figma.com/careers',
+    jobPostingUrl: 'https://job-boards.greenhouse.io/figma/jobs/5711468004',
+  },
+  {
+    id: 5,
+    company: 'Google DeepMind',
+    role: 'Sr. AI Product Designer, Gemini',
+    salary: '~$220–300K',
+    match: 90,
+    location: 'Mountain View / NYC / SF / Seattle',
+    posted: 'Mar 2026',
+    companyOutlook: 'Gemini is Google\'s flagship AI product. DeepMind = world\'s leading AI research lab. Billions of potential users.',
+    compatibility: '7+ years designing UIs, AI-powered interface portfolio, cross-functional collaboration. Designing "how people create with AI" = PawPaw Story experience.',
+    url: 'https://deepmind.google/careers/',
+    jobPostingUrl: 'https://job-boards.greenhouse.io/deepmind/jobs/7530716',
+  },
+  {
+    id: 6,
+    company: 'ElevenLabs',
+    role: 'Product Designer',
+    salary: 'TBD ($11B company)',
+    match: 89,
+    location: 'Remote / London',
+    posted: 'Mar 2026',
+    companyOutlook: 'Fastest-growing AI audio company. $11B valuation, funded by a16z + Sequoia. Small team, massive scale.',
+    compatibility: 'AI-first product design, unexplored problem spaces, ships independently. PawPaw Story matches their "high-velocity lean teams" culture. Remote-friendly.',
+    url: 'https://elevenlabs.io/careers',
+    jobPostingUrl: 'https://elevenlabs.io/careers/89da00ec-11b0-4359-913b-c3a89c1013bc/product-designer',
+  },
+  {
+    id: 7,
+    company: 'OpenAI',
+    role: 'Product Designer, Growth',
+    salary: '~$200–350K',
+    match: 88,
+    location: 'San Francisco (Onsite)',
+    posted: 'Mar 2026',
+    companyOutlook: 'Growth team = adoption, engagement, retention for ChatGPT.',
+    compatibility: 'Growth/onboarding experience, consumer-facing products, data + instinct balance. Content creation background shows user acquisition funnel understanding.',
+    url: 'https://openai.com/careers',
+    jobPostingUrl: 'https://openai.com/careers/product-designer-growth-san-francisco/',
+  },
+  {
+    id: 8,
+    company: 'Google DeepMind',
+    role: 'Sr. Staff AI Product Designer, Gemini iOS',
+    salary: '~$280–400K',
+    match: 85,
+    location: 'Mountain View / Seattle',
+    posted: 'Mar 2026',
+    companyOutlook: 'Highest-seniority design role on Gemini iOS — architecting "first-of-their-kind" mobile AI interactions.',
+    compatibility: 'Stretch level but worth applying. PawPaw Story iOS + enterprise design leadership shows trajectory. Role values "vibe coding" and AI tools in design — Katie does this daily.',
+    url: 'https://deepmind.google/careers/',
+    jobPostingUrl: 'https://job-boards.greenhouse.io/deepmind/jobs/7486778',
+  },
+  {
+    id: 9,
+    company: 'Figma',
+    role: 'Product Designer, Growth & Monetization',
+    salary: '$169–303K',
+    match: 84,
+    location: 'US Remote / SF / NYC',
+    posted: 'Mar 2026',
+    companyOutlook: 'Growth team at one of the most design-forward companies in the world.',
+    compatibility: 'Growth/monetization experience from enterprise BofA work. Content creator background = understanding user funnels.',
+    url: 'https://figma.com/careers',
+    jobPostingUrl: 'https://boards.greenhouse.io/figma/jobs/5711595004',
+  },
+  {
+    id: 10,
+    company: 'Vercel',
+    role: 'Senior Product Designer',
+    salary: '$156–234K',
+    match: 83,
+    location: 'US Remote',
+    posted: 'Mar 2026',
+    companyOutlook: 'Behind Next.js, v0 (AI design tool), AI SDK. 11M+ developers on platform.',
+    compatibility: '4+ years design, visual/UI/interaction skills. Uses v0, Cursor, and Claude Code — Katie uses all of these. Builder culture alignment.',
+    url: 'https://vercel.com/careers',
+    jobPostingUrl: 'https://vercel.com/careers/senior-product-designer-us-5735407004',
+  },
+  {
+    id: 11,
+    company: 'Databricks',
+    role: 'Sr. Product Designer, AI/BI',
+    salary: '$145–199K',
+    match: 82,
+    location: 'Seattle, WA',
+    posted: 'Mar 2026',
+    companyOutlook: '$62B+ valuation, 50%+ Fortune 500 use it. IPO candidate. AI/BI team = humans and AI thinking together about data.',
+    compatibility: '5+ years product design, HCI/design background, enterprise product experience (BofA), system thinker. Cognitive science + design intersection.',
+    url: 'https://databricks.com/careers',
+    jobPostingUrl: 'https://www.databricks.com/company/careers/product/sr-product-designer-ai-bi-8429978002',
+  },
+  {
+    id: 12,
+    company: 'Linear',
+    role: 'Senior / Staff Product Designer',
+    salary: 'TBD (well-funded)',
+    match: 81,
+    location: 'Fully Remote',
+    posted: 'Mar 2026',
+    companyOutlook: 'Best-in-class product tool. Building AI-powered project management. Known for design craft excellence.',
+    compatibility: 'High craft bar, product design excellence. Linear values design taste above all. Remote = no relocation needed.',
+    url: 'https://linear.app/careers',
+    jobPostingUrl: 'https://linear.app/careers',
+  },
+  {
+    id: 13,
+    company: 'Notion',
+    role: 'Product Designer, Growth',
+    salary: '~$105–250K',
+    match: 80,
+    location: 'NYC / San Francisco',
+    posted: 'Mar 2026',
+    companyOutlook: '$10B+ valuation, Notion AI integrations, iconic design culture.',
+    compatibility: 'Cross-functional collaboration, design systems, lifecycle design. Enterprise experience + AI building = strong.',
+    url: 'https://notion.com/careers',
+    jobPostingUrl: 'https://www.notion.com/careers',
   },
 ];
 
@@ -68,15 +198,76 @@ function MatchBadge({ score }: { score: number }) {
   );
 }
 
+function JobCard({
+  job,
+  isSelected,
+  isApplied,
+  onClick,
+  onApply,
+}: {
+  job: Job;
+  isSelected: boolean;
+  isApplied: boolean;
+  onClick: () => void;
+  onApply: (e: React.MouseEvent) => void;
+}) {
+  return (
+    <div
+      onClick={onClick}
+      className={`bg-slate-900 border rounded-xl p-4 cursor-pointer transition ${
+        isSelected ? 'border-violet-500' : 'border-slate-800 hover:border-slate-700'
+      }`}
+    >
+      <div className="flex items-start justify-between mb-2">
+        <div>
+          <div className="text-sm font-semibold text-white">{job.company}</div>
+          <div className="text-sm text-slate-400">{job.role}</div>
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          <MatchBadge score={job.match} />
+          {isApplied && (
+            <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+              ✓ Applied
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center gap-3 text-xs text-slate-500 mb-3">
+        <span>💰 {job.salary}</span>
+        <span>📍 {job.location.split(' (')[0]}</span>
+      </div>
+      <div className="text-xs text-slate-500 mb-3">Posted {job.posted}</div>
+
+      {/* Why this role — always visible */}
+      <div className="bg-violet-500/10 border border-violet-500/20 rounded-lg p-3 mb-3">
+        <p className="text-xs font-semibold text-violet-400 mb-2">✨ Why this role for you</p>
+        <p className="text-xs text-slate-300 flex gap-2 mb-1.5">
+          <span>🏢</span><span>{job.companyOutlook}</span>
+        </p>
+        <p className="text-xs text-slate-300 flex gap-2">
+          <span>🎯</span><span>{job.compatibility}</span>
+        </p>
+      </div>
+
+      <button
+        onClick={onApply}
+        className="w-full py-2 bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold rounded-lg transition"
+      >
+        Apply →
+      </button>
+    </div>
+  );
+}
+
 export default function JobsPage() {
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
-
   const [search, setSearch] = useState('');
   const [filterLocation, setFilterLocation] = useState('');
   const [filterType, setFilterType] = useState('');
   const [copied, setCopied] = useState<string | null>(null);
   const [profile, setProfile] = useState<Record<string, string>>({});
   const [appliedJobs, setAppliedJobs] = useState<Set<number>>(new Set());
+  const [appliedFolderOpen, setAppliedFolderOpen] = useState(false);
 
   // Load profile + applied jobs on mount
   useEffect(() => {
@@ -104,7 +295,6 @@ export default function JobsPage() {
         let apps: { id: number; company: string; role: string; date: string; status: string }[] = [];
         try { apps = savedApps ? JSON.parse(savedApps) : []; } catch {}
         if (isNowApplied) {
-          // Add to Applied column if not already there
           if (!apps.find((a) => a.id === jobId)) {
             apps.push({
               id: jobId,
@@ -115,7 +305,6 @@ export default function JobsPage() {
             });
           }
         } else {
-          // Remove from applications board
           apps = apps.filter((a) => a.id !== jobId);
         }
         localStorage.setItem('jobpilot_applications', JSON.stringify(apps));
@@ -132,6 +321,10 @@ export default function JobsPage() {
       (!filterType || j.role.includes(filterType))
     );
   });
+
+  // Split into unapplied (primary) and applied (folder)
+  const unappliedJobs = filteredJobs.filter((j) => !appliedJobs.has(j.id));
+  const appliedFilteredJobs = filteredJobs.filter((j) => appliedJobs.has(j.id));
 
   const copyToClipboard = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
@@ -166,6 +359,17 @@ export default function JobsPage() {
     ]},
   ];
 
+  const cardProps = (job: Job) => ({
+    job,
+    isSelected: selectedJob?.id === job.id,
+    isApplied: appliedJobs.has(job.id),
+    onClick: () => setSelectedJob(job),
+    onApply: (e: React.MouseEvent) => {
+      e.stopPropagation();
+      window.open(job.jobPostingUrl || job.url, '_blank');
+    },
+  });
+
   return (
     <AppLayout>
       <div className="flex gap-0 h-[calc(100vh-4rem)] -m-8">
@@ -188,8 +392,10 @@ export default function JobsPage() {
               >
                 <option value="">All Locations</option>
                 <option value="Remote">Remote</option>
-                <option value="Hybrid">Hybrid</option>
                 <option value="San Francisco">San Francisco</option>
+                <option value="NYC">NYC</option>
+                <option value="Seattle">Seattle</option>
+                <option value="Mountain View">Mountain View</option>
               </select>
               <select
                 className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-400 focus:outline-none focus:border-violet-500"
@@ -206,55 +412,44 @@ export default function JobsPage() {
 
           {/* Job cards */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {filteredJobs.length === 0 && (
+            {/* Unapplied jobs — primary list */}
+            {unappliedJobs.length === 0 && appliedFilteredJobs.length === 0 && (
               <div className="text-center text-slate-500 py-12 text-sm">No jobs match your search.</div>
             )}
-            {filteredJobs.map((job) => (
-              <div
-                key={job.id}
-                className={`bg-slate-900 border rounded-xl p-4 cursor-pointer transition ${
-                  selectedJob?.id === job.id ? 'border-violet-500' : 'border-slate-800 hover:border-slate-700'
-                }`}
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <div className="text-sm font-semibold text-white">{job.company}</div>
-                    <div className="text-sm text-slate-400">{job.role}</div>
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <MatchBadge score={job.match} />
-                    {appliedJobs.has(job.id) && (
-                      <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full">
-                        ✓ Applied
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 text-xs text-slate-500 mb-3">
-                  <span>💰 {job.salary}</span>
-                  <span>📍 {job.location.split(' (')[0]}</span>
-                </div>
-                <div className="text-xs text-slate-500 mb-3">Posted {job.posted}</div>
-
-                {/* Why this role — always visible */}
-                <div className="bg-violet-500/10 border border-violet-500/20 rounded-lg p-3 mb-3">
-                  <p className="text-xs font-semibold text-violet-400 mb-2">✨ Why this role for you</p>
-                  <p className="text-xs text-slate-300 flex gap-2 mb-1.5">
-                    <span>🏢</span><span>{job.companyOutlook}</span>
-                  </p>
-                  <p className="text-xs text-slate-300 flex gap-2">
-                    <span>🎯</span><span>{job.compatibility}</span>
-                  </p>
-                </div>
-
-                <button
-                  onClick={() => setSelectedJob(job)}
-                  className="w-full py-2 bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold rounded-lg transition"
-                >
-                  Apply →
-                </button>
+            {unappliedJobs.length === 0 && appliedFilteredJobs.length > 0 && (
+              <div className="text-center text-slate-500 py-8 text-sm">
+                All matching jobs are in your Applied folder below.
               </div>
+            )}
+            {unappliedJobs.map((job) => (
+              <JobCard key={job.id} {...cardProps(job)} />
             ))}
+
+            {/* Applied folder — collapsed by default */}
+            {appliedFilteredJobs.length > 0 && (
+              <div className="pt-2">
+                <button
+                  onClick={() => setAppliedFolderOpen((o) => !o)}
+                  className="w-full flex items-center justify-between px-4 py-2.5 bg-slate-800/60 hover:bg-slate-800 border border-slate-700 rounded-xl text-sm font-medium text-slate-400 hover:text-slate-300 transition"
+                >
+                  <span className="flex items-center gap-2">
+                    <span>{appliedFolderOpen ? '📂' : '📁'}</span>
+                    <span>Applied</span>
+                    <span className="text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold">
+                      {appliedFilteredJobs.length}
+                    </span>
+                  </span>
+                  <span className="text-slate-600 text-xs">{appliedFolderOpen ? '▲ collapse' : '▼ view all'}</span>
+                </button>
+                {appliedFolderOpen && (
+                  <div className="mt-3 space-y-3">
+                    {appliedFilteredJobs.map((job) => (
+                      <JobCard key={job.id} {...cardProps(job)} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -322,7 +517,7 @@ export default function JobsPage() {
 
               <div className="h-px bg-slate-800" />
 
-              {/* Why this role — prominent at top of Form Assist */}
+              {/* Why this role */}
               <div className="bg-violet-500/10 border border-violet-500/25 rounded-xl p-5">
                 <p className="text-sm font-semibold text-violet-300 mb-3">✨ Why this role is a fit for you</p>
                 <div className="space-y-3">
