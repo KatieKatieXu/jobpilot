@@ -240,6 +240,57 @@ export default function DashboardPage() {
           </Link>
         </div>
 
+        {/* Onboarding journey strip */}
+        {(profileStrength < 80 || !hasResume || !hasMarket || appliedCount === 0) && (() => {
+          const steps = [
+            { label: 'Build Profile', done: profileStrength >= 70, href: '/profile' },
+            { label: 'Revise Resume', done: hasResume, href: '/resume' },
+            { label: 'Market Analysis', done: hasMarket, href: '/market' },
+            { label: 'Apply to Jobs', done: appliedCount > 0, href: '/jobs' },
+          ];
+          const activeIdx = steps.findIndex((s) => !s.done);
+          return (
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+              <div className="flex items-center justify-between">
+                {steps.map((step, i) => (
+                  <div key={step.label} className="flex items-center flex-1 last:flex-initial">
+                    <div className="flex flex-col items-center gap-1.5">
+                      {step.done ? (
+                        <div className="w-8 h-8 rounded-full bg-green-500/20 border-2 border-green-500 flex items-center justify-center text-green-400 text-sm font-bold">
+                          ✓
+                        </div>
+                      ) : (
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2 ${
+                          i === activeIdx
+                            ? 'bg-violet-600/20 border-violet-500 text-violet-300'
+                            : 'bg-slate-800 border-slate-700 text-slate-500'
+                        }`}>
+                          {i + 1}
+                        </div>
+                      )}
+                      <span className={`text-xs font-medium ${
+                        step.done ? 'text-green-400' : i === activeIdx ? 'text-violet-300' : 'text-slate-500'
+                      }`}>
+                        {step.label}
+                      </span>
+                      {!step.done && (
+                        <Link href={step.href} className="text-[10px] text-violet-400 hover:text-violet-300 transition font-medium">
+                          → Do it
+                        </Link>
+                      )}
+                    </div>
+                    {i < steps.length - 1 && (
+                      <div className={`flex-1 h-0.5 mx-3 mt-[-18px] rounded ${
+                        step.done ? 'bg-green-500/40' : 'bg-slate-700'
+                      }`} />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Stat cards */}
         <div className="grid grid-cols-4 gap-4">
           {statCards.map((stat) => (
@@ -258,33 +309,6 @@ export default function DashboardPage() {
             </Link>
           ))}
         </div>
-
-        {/* Checklist nudges */}
-        {(profileStrength < 80 || !hasResume || !hasMarket) && (
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-5">
-            <h3 className="text-sm font-semibold text-white mb-3">🚀 Get more out of Jobpilot</h3>
-            <div className="space-y-2">
-              {profileStrength < 80 && (
-                <Link href="/profile" className="flex items-center gap-3 text-sm text-slate-300 hover:text-violet-300 transition">
-                  <span className="w-5 h-5 rounded-full border border-slate-600 flex items-center justify-center text-xs">○</span>
-                  Complete your profile ({profileStrength}% done)
-                </Link>
-              )}
-              {!hasResume && (
-                <Link href="/resume" className="flex items-center gap-3 text-sm text-slate-300 hover:text-violet-300 transition">
-                  <span className="w-5 h-5 rounded-full border border-slate-600 flex items-center justify-center text-xs">○</span>
-                  Run an AI resume revision
-                </Link>
-              )}
-              {!hasMarket && (
-                <Link href="/market" className="flex items-center gap-3 text-sm text-slate-300 hover:text-violet-300 transition">
-                  <span className="w-5 h-5 rounded-full border border-slate-600 flex items-center justify-center text-xs">○</span>
-                  Run your market analysis
-                </Link>
-              )}
-            </div>
-          </div>
-        )}
 
         <div className="grid grid-cols-3 gap-6">
           {/* Recent Activity */}

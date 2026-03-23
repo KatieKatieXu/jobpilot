@@ -147,7 +147,6 @@ export default function ProfilePage() {
     localStorage.setItem('jobpilot_profile', JSON.stringify(profile));
     setHasExistingProfile(true);
     setViewMode('summary');
-    router.push('/dashboard');
   };
 
   const clearProfile = () => {
@@ -306,20 +305,64 @@ export default function ProfilePage() {
               )}
             </div>
 
-            {/* CTA */}
+            {/* Next Step CTA */}
             <div className="flex gap-3 pt-2">
-              <button
-                onClick={() => { setViewMode('edit'); setStep(1); }}
-                className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-sm font-medium rounded-xl transition"
-              >
-                ✏️ Edit Profile
-              </button>
-              <button
-                onClick={() => router.push('/jobs')}
-                className="flex-1 py-3 bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold rounded-xl transition"
-              >
-                Browse Jobs →
-              </button>
+              {(() => {
+                const hasResumeReport = !!localStorage.getItem('jobpilot_resume_report');
+                const hasMarketReport = !!localStorage.getItem('jobpilot_market_report');
+                if (!hasResumeReport) {
+                  return (
+                    <>
+                      <button
+                        onClick={() => router.push('/resume')}
+                        className="flex-1 py-3 bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold rounded-xl transition"
+                      >
+                        Next: Revise Your Resume →
+                      </button>
+                      <button
+                        onClick={() => router.push('/jobs')}
+                        className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-sm font-medium rounded-xl transition"
+                      >
+                        Browse Jobs →
+                      </button>
+                    </>
+                  );
+                }
+                if (!hasMarketReport) {
+                  return (
+                    <>
+                      <button
+                        onClick={() => router.push('/market')}
+                        className="flex-1 py-3 bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold rounded-xl transition"
+                      >
+                        Next: Run Market Analysis →
+                      </button>
+                      <button
+                        onClick={() => router.push('/jobs')}
+                        className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-sm font-medium rounded-xl transition"
+                      >
+                        Browse Jobs →
+                      </button>
+                    </>
+                  );
+                }
+                return (
+                  <>
+                    <button
+                      onClick={() => router.push('/jobs')}
+                      className="flex-1 py-3 bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold rounded-xl transition"
+                    >
+                      Browse Jobs →
+                    </button>
+                    <button
+                      onClick={() => router.push('/dashboard')}
+                      className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-sm font-medium rounded-xl transition"
+                    >
+                      View Dashboard →
+                    </button>
+                  </>
+                );
+              })()}
             </div>
 
             {/* Experience Bank */}

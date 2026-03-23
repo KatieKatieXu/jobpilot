@@ -482,18 +482,30 @@ export default function JobsPage() {
     job,
     isSelected: selectedJob?.id === job.id,
     isApplied: appliedJobs.has(job.id),
-    onClick: () => setSelectedJob(job),
+    onClick: () => handleJobSelect(job),
     onApply: (e: React.MouseEvent) => {
       e.stopPropagation();
       window.open(job.jobPostingUrl || job.url, '_blank');
     },
   });
 
+  // Mobile: when a job is selected, show right panel as overlay
+  const [mobileShowDetail, setMobileShowDetail] = useState(false);
+
+  const handleJobSelect = (job: Job) => {
+    setSelectedJob(job);
+    setMobileShowDetail(true);
+  };
+
+  const handleCloseDetail = () => {
+    setMobileShowDetail(false);
+  };
+
   return (
     <AppLayout>
-      <div className="flex gap-0 h-[calc(100vh-4rem)] -m-8">
+      <div className="flex flex-col md:flex-row gap-0 h-[calc(100vh-3.5rem)] md:h-[calc(100vh-4rem)] -m-4 md:-m-8">
         {/* Left panel */}
-        <div className="w-[40%] border-r border-slate-800 flex flex-col overflow-hidden">
+        <div className={`w-full md:w-[40%] border-r border-slate-800 flex flex-col overflow-hidden ${mobileShowDetail ? 'hidden md:flex' : 'flex'}`}>
           {/* Search & filters */}
           <div className="p-5 border-b border-slate-800 space-y-3">
             <div className="flex items-center gap-3">
@@ -578,7 +590,18 @@ export default function JobsPage() {
         </div>
 
         {/* Right panel */}
-        <div className="flex-1 overflow-y-auto">
+        <div className={`flex-1 overflow-y-auto ${mobileShowDetail ? 'flex flex-col' : 'hidden md:block'}`}>
+          {/* Mobile back button */}
+          <button
+            onClick={handleCloseDetail}
+            className="md:hidden flex items-center gap-2 px-4 py-3 text-sm text-slate-400 hover:text-white border-b border-slate-800 transition"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to jobs
+          </button>
+
           {!selectedJob ? (
             <div className="flex flex-col items-center justify-center h-full text-center p-12">
               <div className="text-5xl mb-4">✈️</div>
@@ -588,10 +611,10 @@ export default function JobsPage() {
           ) : (
             <div className="p-6 space-y-6">
               {/* Job header */}
-              <div className="flex items-start justify-between">
+              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                 <div>
-                  <h2 className="text-xl font-bold text-white">{selectedJob.company} — {selectedJob.role}</h2>
-                  <div className="flex items-center gap-3 mt-1 text-sm text-slate-400">
+                  <h2 className="text-lg md:text-xl font-bold text-white">{selectedJob.company} — {selectedJob.role}</h2>
+                  <div className="flex flex-wrap items-center gap-2 md:gap-3 mt-1 text-sm text-slate-400">
                     <span>{selectedJob.salary}</span>
                     <span>·</span>
                     <span>{selectedJob.location}</span>
@@ -599,7 +622,7 @@ export default function JobsPage() {
                     <MatchBadge score={selectedJob.match} />
                   </div>
                 </div>
-                <div className="flex flex-col gap-2 items-end">
+                <div className="flex flex-col gap-2 items-start md:items-end">
                   <div className="flex gap-2">
                     <a
                       href={selectedJob.jobPostingUrl || selectedJob.url}
@@ -610,7 +633,7 @@ export default function JobsPage() {
                       Open Job Page →
                     </a>
                     <button
-                      onClick={() => setSelectedJob(null)}
+                      onClick={() => { setSelectedJob(null); setMobileShowDetail(false); }}
                       className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-sm rounded-lg transition"
                     >
                       ✕

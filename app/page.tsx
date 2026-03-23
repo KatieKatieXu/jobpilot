@@ -1,6 +1,17 @@
+'use client';
+
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
 export default function Home() {
+  const [hasProfile, setHasProfile] = useState(false);
+  const [checked, setChecked] = useState(false);
+
+  useEffect(() => {
+    setHasProfile(!!localStorage.getItem('jobpilot_profile'));
+    setChecked(true);
+  }, []);
+
   return (
     <div className="min-h-screen bg-[#0f1117] flex flex-col items-center justify-center px-4">
       {/* Background gradient */}
@@ -26,12 +37,24 @@ export default function Home() {
         </p>
 
         {/* CTA */}
-        <Link
-          href="/profile"
-          className="inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-500 text-white font-semibold px-8 py-4 rounded-xl text-lg transition-all duration-150 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40"
-        >
-          Get Started →
-        </Link>
+        {checked && (
+          <div className="flex flex-col items-center gap-3">
+            <Link
+              href={hasProfile ? '/dashboard' : '/profile'}
+              className="inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-500 text-white font-semibold px-8 py-4 rounded-xl text-lg transition-all duration-150 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40"
+            >
+              {hasProfile ? 'Go to Dashboard →' : 'Get Started →'}
+            </Link>
+            {hasProfile && (
+              <Link
+                href="/profile"
+                className="text-sm text-slate-500 hover:text-violet-400 transition"
+              >
+                New? Set up your profile →
+              </Link>
+            )}
+          </div>
+        )}
 
         {/* Features */}
         <div className="mt-16 grid grid-cols-3 gap-6 text-center">
