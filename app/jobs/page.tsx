@@ -264,6 +264,32 @@ interface QAResult {
   answer: string;
 }
 
+interface SavedQA {
+  results: QAResult[];
+  savedAt: string;
+}
+
+const QA_STORAGE_KEY = 'jobpilot_qa_answers';
+
+function loadAllQA(): Record<number, SavedQA> {
+  try {
+    const raw = localStorage.getItem(QA_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+function saveQAForJob(jobId: number, results: QAResult[]) {
+  const all = loadAllQA();
+  all[jobId] = { results, savedAt: new Date().toISOString() };
+  localStorage.setItem(QA_STORAGE_KEY, JSON.stringify(all));
+}
+
+function clearQAForJob(jobId: number) {
+  const all = loadAllQA();
+  delete all[jobId];
+  localStorage.setItem(QA_STORAGE_KEY, JSON.stringify(all));
+}
+
 export default function JobsPage() {
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [rightTab, setRightTab] = useState<'form' | 'questions'>('form');
@@ -278,9 +304,11 @@ export default function JobsPage() {
   // Q&A state
   const [rawQuestions, setRawQuestions] = useState('');
   const [qaResults, setQaResults] = useState<QAResult[]>([]);
+  const [qaSavedAt, setQaSavedAt] = useState<string | null>(null);
   const [qaLoading, setQaLoading] = useState(false);
   const [qaError, setQaError] = useState('');
   const [copiedAnswer, setCopiedAnswer] = useState<number | null>(null);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   // Load profile + applied jobs on mount
   useEffect(() => {
@@ -293,6 +321,24 @@ export default function JobsPage() {
       try { setAppliedJobs(new Set(JSON.parse(savedApplied))); } catch {}
     }
   }, []);
+
+  // When selected job changes, load its saved Q&A (if any)
+  useEffect(() => {
+    if (!selectedJob) return;
+    const all = loadAllQA();
+    const saved = all[selectedJob.id];
+    if (saved) {
+      setQaResults(saved.results);
+      setQaSavedAt(saved.savedAt);
+      setRawQuestions('');
+    } else {
+      setQaResults([]);
+      setQaSavedAt(null);
+      setRawQuestions('');
+    }
+    setQaError('');
+    setShowClearConfirm(false);
+  }, [selectedJob?.id]);
 
   const toggleApplied = (jobId: number) => {
     const job = seedJobs.find((j) => j.id === jobId);
@@ -376,7 +422,6 @@ export default function JobsPage() {
     if (!selectedJob || !rawQuestions.trim()) return;
     setQaLoading(true);
     setQaError('');
-    setQaResults([]);
     try {
       const res = await fetch('/api/answer-questions', {
         method: 'POST',
@@ -394,12 +439,24 @@ export default function JobsPage() {
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Generation failed');
+      const now = new Date().toISOString();
       setQaResults(data.results);
+      setQaSavedAt(now);
+      saveQAForJob(selectedJob.id, data.results);
     } catch (e: unknown) {
       setQaError(e instanceof Error ? e.message : 'Something went wrong');
     } finally {
       setQaLoading(false);
     }
+  };
+
+  const clearAnswers = () => {
+    if (!selectedJob) return;
+    clearQAForJob(selectedJob.id);
+    setQaResults([]);
+    setQaSavedAt(null);
+    setRawQuestions('');
+    setShowClearConfirm(false);
   };
 
   const copyAnswer = (answer: string, idx: number) => {
@@ -609,7 +666,7 @@ export default function JobsPage() {
                 >
                   ✍️ Answer Questions
                   {qaResults.length > 0 && (
-                    <span className="text-[10px] bg-violet-500 text-white px-1.5 py-0.5 rounded-full font-bold">
+                    <span className="text-[10px] bg-emerald-500 text-white px-1.5 py-0.5 rounded-full font-bold">
                       {qaResults.length}
                     </span>
                   )}
@@ -663,58 +720,43 @@ export default function JobsPage() {
               {/* ── ANSWER QUESTIONS TAB ── */}
               {rightTab === 'questions' && (
                 <div className="space-y-5">
-                  <div>
-                    <p className="text-xs text-slate-400 mb-1 leading-relaxed">
-                      Open the job page, copy the open-ended questions, and paste them below. AI will write personalized answers using your profile and resume.
-                    </p>
-                  </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                      Paste questions from the application
-                    </label>
-                    <textarea
-                      value={rawQuestions}
-                      onChange={(e) => setRawQuestions(e.target.value)}
-                      placeholder={`Example:\n1. What makes you excited about the ElevenLabs mission?\n2. Tell us about a product that you think is expertly designed and why?`}
-                      rows={6}
-                      className="w-full bg-slate-800/60 border border-slate-700 rounded-xl px-4 py-3 text-slate-200 text-sm placeholder-slate-600 focus:outline-none focus:border-violet-500 resize-none transition"
-                    />
-                  </div>
-
-                  <button
-                    onClick={generateAnswers}
-                    disabled={qaLoading || !rawQuestions.trim()}
-                    className="w-full py-3 bg-violet-600 hover:bg-violet-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-semibold rounded-xl transition flex items-center justify-center gap-2"
-                  >
-                    {qaLoading ? (
-                      <><span className="animate-spin text-base">⟳</span> Writing your answers…</>
-                    ) : (
-                      <>✍️ Generate Answers</>
-                    )}
-                  </button>
-
-                  {qaError && (
-                    <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
-                      ⚠️ {qaError}
-                    </div>
-                  )}
-
+                  {/* Saved answers — shown when answers exist for this job */}
                   {qaResults.length > 0 && (
                     <div className="space-y-4">
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 h-px bg-slate-700" />
-                        <span className="text-xs text-slate-500">{qaResults.length} answer{qaResults.length > 1 ? 's' : ''} generated</span>
-                        <div className="flex-1 h-px bg-slate-700" />
+                      {/* Header row */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold text-emerald-400">✅ {qaResults.length} saved answer{qaResults.length > 1 ? 's' : ''}</span>
+                          {qaSavedAt && (
+                            <span className="text-xs text-slate-500">
+                              · {new Date(qaSavedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            </span>
+                          )}
+                        </div>
+                        {showClearConfirm ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-slate-400">Clear all answers?</span>
+                            <button onClick={() => setShowClearConfirm(false)} className="text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 transition">No</button>
+                            <button onClick={clearAnswers} className="text-xs px-2 py-1 rounded bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-400 transition">Yes, clear</button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setShowClearConfirm(true)}
+                            className="text-xs px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-500 hover:text-white transition"
+                          >
+                            🗑 Clear
+                          </button>
+                        )}
                       </div>
+
+                      {/* Answer cards */}
                       {qaResults.map((qa, idx) => (
                         <div key={idx} className="bg-slate-800/60 border border-slate-700 rounded-xl overflow-hidden">
-                          {/* Question */}
                           <div className="px-4 py-3 border-b border-slate-700 bg-slate-800/80">
                             <p className="text-xs font-semibold text-violet-400 mb-0.5">Q{idx + 1}</p>
                             <p className="text-sm text-slate-300">{qa.question}</p>
                           </div>
-                          {/* Answer */}
                           <div className="px-4 py-3">
                             <div className="flex items-start justify-between gap-3 mb-2">
                               <p className="text-xs font-semibold text-emerald-400">Your Answer</p>
@@ -733,12 +775,53 @@ export default function JobsPage() {
                           </div>
                         </div>
                       ))}
-                      <button
-                        onClick={() => { setQaResults([]); setRawQuestions(''); }}
-                        className="w-full py-2 text-xs text-slate-500 hover:text-slate-400 transition"
-                      >
-                        Clear & start over
-                      </button>
+
+                      {/* Divider before add-more section */}
+                      <div className="flex items-center gap-3 pt-1">
+                        <div className="flex-1 h-px bg-slate-700" />
+                        <span className="text-xs text-slate-500">add more questions</span>
+                        <div className="flex-1 h-px bg-slate-700" />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Input area — always shown so user can add more questions */}
+                  {qaResults.length === 0 && (
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                      Open the job page, copy the open-ended questions, and paste them below. AI writes personalized answers using your profile and resume — saved here for interview prep.
+                    </p>
+                  )}
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                      {qaResults.length > 0 ? 'Paste additional questions' : 'Paste questions from the application'}
+                    </label>
+                    <textarea
+                      value={rawQuestions}
+                      onChange={(e) => setRawQuestions(e.target.value)}
+                      placeholder={`Example:\n1. What makes you excited about the ElevenLabs mission?\n2. Tell us about a product that you think is expertly designed and why?`}
+                      rows={5}
+                      className="w-full bg-slate-800/60 border border-slate-700 rounded-xl px-4 py-3 text-slate-200 text-sm placeholder-slate-600 focus:outline-none focus:border-violet-500 resize-none transition"
+                    />
+                  </div>
+
+                  <button
+                    onClick={generateAnswers}
+                    disabled={qaLoading || !rawQuestions.trim()}
+                    className="w-full py-3 bg-violet-600 hover:bg-violet-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-semibold rounded-xl transition flex items-center justify-center gap-2"
+                  >
+                    {qaLoading ? (
+                      <><span className="animate-spin text-base">⟳</span> Writing your answers…</>
+                    ) : qaResults.length > 0 ? (
+                      <>✍️ Generate More Answers</>
+                    ) : (
+                      <>✍️ Generate Answers</>
+                    )}
+                  </button>
+
+                  {qaError && (
+                    <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
+                      ⚠️ {qaError}
                     </div>
                   )}
                 </div>
