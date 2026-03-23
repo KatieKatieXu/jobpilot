@@ -488,7 +488,12 @@ export default function JobsPage() {
         <div className="w-[40%] border-r border-slate-800 flex flex-col overflow-hidden">
           {/* Search & filters */}
           <div className="p-5 border-b border-slate-800 space-y-3">
-            <h1 className="text-xl font-bold text-white">Job Board</h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl font-bold text-white">Job Board</h1>
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-400 border border-violet-500/30">
+                {filteredJobs.length} {filteredJobs.length !== seedJobs.length ? `of ${seedJobs.length}` : 'jobs'}
+              </span>
+            </div>
             <input
               className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-violet-500 transition"
               placeholder="Search roles, companies..."
