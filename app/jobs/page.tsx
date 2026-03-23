@@ -440,9 +440,14 @@ export default function JobsPage() {
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Generation failed');
       const now = new Date().toISOString();
-      setQaResults(data.results);
+      // Append new answers to existing, then save combined set
+      setQaResults((prev) => {
+        const combined = [...prev, ...data.results];
+        saveQAForJob(selectedJob.id, combined);
+        return combined;
+      });
       setQaSavedAt(now);
-      saveQAForJob(selectedJob.id, data.results);
+      setRawQuestions(''); // clear the input box after generation
     } catch (e: unknown) {
       setQaError(e instanceof Error ? e.message : 'Something went wrong');
     } finally {
