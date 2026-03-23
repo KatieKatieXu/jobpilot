@@ -24,10 +24,17 @@ Output format — a JSON array where each object has:
 - answer: the written answer in applicant's voice
 `;
 
+interface ExperienceBankEntry {
+  question: string;
+  answer: string;
+  tags: string[];
+}
+
 function buildUserPrompt(
   questions: string[],
   profile: Record<string, string>,
-  job: { company: string; role: string; companyOutlook?: string; compatibility?: string }
+  job: { company: string; role: string; companyOutlook?: string; compatibility?: string },
+  experienceBank: ExperienceBankEntry[] = []
 ): string {
   const profileSection = `
 APPLICANT PROFILE:
@@ -53,12 +60,24 @@ TARGET ROLE:
 - Why they're a fit: ${job.compatibility || ''}
 `.trim();
 
+  const bankSection = experienceBank.length > 0
+    ? `
+EXPERIENCE BANK — The applicant's real past answers to similar questions. Use these as a reference for tone, voice, specific stories, and examples. Pull in concrete details when relevant:
+${experienceBank.map((e, i) => `[${i + 1}] Q: ${e.question}\nA: ${e.answer}`).join('\n\n')}
+`.trim()
+    : '';
+
   const questionsSection = `
 QUESTIONS TO ANSWER (return one answer per question, in order):
 ${questions.map((q, i) => `${i + 1}. ${q}`).join('\n')}
 `.trim();
 
-  return `${profileSection}\n\n${jobSection}\n\n${questionsSection}\n\nReturn a JSON array with one object per question: [{ "question": "...", "answer": "..." }, ...]`;
+  const parts = [profileSection, jobSection];
+  if (bankSection) parts.push(bankSection);
+  parts.push(questionsSection);
+  parts.push('Return a JSON array with one object per question: [{ "question": "...", "answer": "..." }, ...]');
+
+  return parts.join('\n\n');
 }
 
 // Parse pasted text into individual questions
@@ -89,7 +108,7 @@ function parseQuestions(raw: string): string[] {
 
 export async function POST(req: NextRequest) {
   try {
-    const { rawQuestions, profile, job } = await req.json();
+    const { rawQuestions, profile, job, experienceBank } = await req.json();
 
     if (!rawQuestions || typeof rawQuestions !== 'string' || rawQuestions.trim().length < 5) {
       return NextResponse.json({ error: 'Please paste at least one question.' }, { status: 400 });
@@ -107,7 +126,7 @@ export async function POST(req: NextRequest) {
 
     const client = new Anthropic({ apiKey });
 
-    const userPrompt = buildUserPrompt(questions, profile || {}, job || { company: '', role: '' });
+    const userPrompt = buildUserPrompt(questions, profile || {}, job || { company: '', role: '' }, experienceBank || []);
 
     const response = await client.messages.create({
       model: 'claude-sonnet-4-5',

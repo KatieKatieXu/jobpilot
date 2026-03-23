@@ -423,6 +423,13 @@ export default function JobsPage() {
     setQaLoading(true);
     setQaError('');
     try {
+      // Load experience bank
+      let experienceBank = [];
+      try {
+        const ebRaw = localStorage.getItem('jobpilot_experience_bank');
+        experienceBank = ebRaw ? JSON.parse(ebRaw) : [];
+      } catch {}
+
       const res = await fetch('/api/answer-questions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -435,6 +442,7 @@ export default function JobsPage() {
             companyOutlook: selectedJob.companyOutlook,
             compatibility: selectedJob.compatibility,
           },
+          experienceBank,
         }),
       });
       const data = await res.json();

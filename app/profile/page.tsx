@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import ResumeUpload from '@/components/ResumeUpload';
+import ExperienceBank from '@/components/ExperienceBank';
 
 const ROLE_TYPES = [
   'Senior Designer',
@@ -320,6 +321,11 @@ export default function ProfilePage() {
                 Browse Jobs →
               </button>
             </div>
+
+            {/* Experience Bank */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+              <ExperienceBank />
+            </div>
           </div>
         </div>
       </AppLayout>
@@ -566,6 +572,11 @@ export default function ProfilePage() {
               )}
             </div>
           </div>
+        </div>
+
+        {/* Experience Bank — always accessible in edit view */}
+        <div className="mt-8 bg-slate-900 border border-slate-800 rounded-2xl p-6">
+          <ExperienceBank />
         </div>
       </div>
     </AppLayout>
