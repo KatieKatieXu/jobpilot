@@ -259,8 +259,14 @@ function JobCard({
   );
 }
 
+interface QAResult {
+  question: string;
+  answer: string;
+}
+
 export default function JobsPage() {
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [rightTab, setRightTab] = useState<'form' | 'questions'>('form');
   const [search, setSearch] = useState('');
   const [filterLocation, setFilterLocation] = useState('');
   const [filterType, setFilterType] = useState('');
@@ -268,6 +274,13 @@ export default function JobsPage() {
   const [profile, setProfile] = useState<Record<string, string>>({});
   const [appliedJobs, setAppliedJobs] = useState<Set<number>>(new Set());
   const [appliedFolderOpen, setAppliedFolderOpen] = useState(false);
+
+  // Q&A state
+  const [rawQuestions, setRawQuestions] = useState('');
+  const [qaResults, setQaResults] = useState<QAResult[]>([]);
+  const [qaLoading, setQaLoading] = useState(false);
+  const [qaError, setQaError] = useState('');
+  const [copiedAnswer, setCopiedAnswer] = useState<number | null>(null);
 
   // Load profile + applied jobs on mount
   useEffect(() => {
@@ -358,6 +371,42 @@ export default function JobsPage() {
       { key: 'workExperience', label: 'Resume / Experience (parsed from PDF)' },
     ]},
   ];
+
+  const generateAnswers = async () => {
+    if (!selectedJob || !rawQuestions.trim()) return;
+    setQaLoading(true);
+    setQaError('');
+    setQaResults([]);
+    try {
+      const res = await fetch('/api/answer-questions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rawQuestions,
+          profile,
+          job: {
+            company: selectedJob.company,
+            role: selectedJob.role,
+            companyOutlook: selectedJob.companyOutlook,
+            compatibility: selectedJob.compatibility,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Generation failed');
+      setQaResults(data.results);
+    } catch (e: unknown) {
+      setQaError(e instanceof Error ? e.message : 'Something went wrong');
+    } finally {
+      setQaLoading(false);
+    }
+  };
+
+  const copyAnswer = (answer: string, idx: number) => {
+    navigator.clipboard.writeText(answer);
+    setCopiedAnswer(idx);
+    setTimeout(() => setCopiedAnswer(null), 1800);
+  };
 
   const cardProps = (job: Job) => ({
     job,
@@ -538,47 +587,162 @@ export default function JobsPage() {
                 </div>
               </div>
 
-              <div>
-                <h3 className="text-base font-semibold text-white mb-1">Form Assist</h3>
-                <p className="text-xs text-slate-500 mb-5">Your profile info, ready to copy.</p>
-                <div className="space-y-6">
-                  {profileFields.map((section) => (
-                    <div key={section.section}>
-                      <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">{section.section}</h4>
-                      <div className="space-y-2">
-                        {section.fields.map((field) => {
-                          const value = (profile as Record<string, string>)[field.key] || '';
-                          if (!value) return null;
-                          return (
-                            <div key={field.key} className="flex items-start gap-3 bg-slate-800 rounded-lg p-3">
-                              <div className="flex-1 min-w-0">
-                                <div className="text-xs text-slate-500 mb-0.5">{field.label}</div>
-                                <div className="text-sm text-slate-200 truncate">{value}</div>
+              {/* Tab switcher */}
+              <div className="flex gap-1 bg-slate-800/60 rounded-xl p-1">
+                <button
+                  onClick={() => setRightTab('form')}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all ${
+                    rightTab === 'form'
+                      ? 'bg-slate-700 text-white'
+                      : 'text-slate-400 hover:text-slate-300'
+                  }`}
+                >
+                  📋 Form Assist
+                </button>
+                <button
+                  onClick={() => setRightTab('questions')}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all ${
+                    rightTab === 'questions'
+                      ? 'bg-violet-600 text-white'
+                      : 'text-slate-400 hover:text-slate-300'
+                  }`}
+                >
+                  ✍️ Answer Questions
+                  {qaResults.length > 0 && (
+                    <span className="text-[10px] bg-violet-500 text-white px-1.5 py-0.5 rounded-full font-bold">
+                      {qaResults.length}
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              {/* ── FORM ASSIST TAB ── */}
+              {rightTab === 'form' && (
+                <div>
+                  <p className="text-xs text-slate-500 mb-5">Your profile info, ready to copy into any application form.</p>
+                  <div className="space-y-6">
+                    {profileFields.map((section) => (
+                      <div key={section.section}>
+                        <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">{section.section}</h4>
+                        <div className="space-y-2">
+                          {section.fields.map((field) => {
+                            const value = (profile as Record<string, string>)[field.key] || '';
+                            if (!value) return null;
+                            return (
+                              <div key={field.key} className="flex items-start gap-3 bg-slate-800 rounded-lg p-3">
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-xs text-slate-500 mb-0.5">{field.label}</div>
+                                  <div className="text-sm text-slate-200 truncate">{value}</div>
+                                </div>
+                                <button
+                                  onClick={() => copyToClipboard(value, field.key)}
+                                  className={`shrink-0 text-xs px-2 py-1 rounded transition ${
+                                    copied === field.key
+                                      ? 'bg-green-900/40 text-green-400'
+                                      : 'bg-slate-700 hover:bg-slate-600 text-slate-400'
+                                  }`}
+                                >
+                                  {copied === field.key ? 'Copied!' : 'Copy'}
+                                </button>
                               </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                    {Object.keys(profile).length === 0 && (
+                      <div className="text-center py-8 text-slate-500 text-sm">
+                        <p>No profile data yet.</p>
+                        <a href="/profile" className="text-violet-400 hover:text-violet-300">Complete your profile →</a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ── ANSWER QUESTIONS TAB ── */}
+              {rightTab === 'questions' && (
+                <div className="space-y-5">
+                  <div>
+                    <p className="text-xs text-slate-400 mb-1 leading-relaxed">
+                      Open the job page, copy the open-ended questions, and paste them below. AI will write personalized answers using your profile and resume.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                      Paste questions from the application
+                    </label>
+                    <textarea
+                      value={rawQuestions}
+                      onChange={(e) => setRawQuestions(e.target.value)}
+                      placeholder={`Example:\n1. What makes you excited about the ElevenLabs mission?\n2. Tell us about a product that you think is expertly designed and why?`}
+                      rows={6}
+                      className="w-full bg-slate-800/60 border border-slate-700 rounded-xl px-4 py-3 text-slate-200 text-sm placeholder-slate-600 focus:outline-none focus:border-violet-500 resize-none transition"
+                    />
+                  </div>
+
+                  <button
+                    onClick={generateAnswers}
+                    disabled={qaLoading || !rawQuestions.trim()}
+                    className="w-full py-3 bg-violet-600 hover:bg-violet-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-semibold rounded-xl transition flex items-center justify-center gap-2"
+                  >
+                    {qaLoading ? (
+                      <><span className="animate-spin text-base">⟳</span> Writing your answers…</>
+                    ) : (
+                      <>✍️ Generate Answers</>
+                    )}
+                  </button>
+
+                  {qaError && (
+                    <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
+                      ⚠️ {qaError}
+                    </div>
+                  )}
+
+                  {qaResults.length > 0 && (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-px bg-slate-700" />
+                        <span className="text-xs text-slate-500">{qaResults.length} answer{qaResults.length > 1 ? 's' : ''} generated</span>
+                        <div className="flex-1 h-px bg-slate-700" />
+                      </div>
+                      {qaResults.map((qa, idx) => (
+                        <div key={idx} className="bg-slate-800/60 border border-slate-700 rounded-xl overflow-hidden">
+                          {/* Question */}
+                          <div className="px-4 py-3 border-b border-slate-700 bg-slate-800/80">
+                            <p className="text-xs font-semibold text-violet-400 mb-0.5">Q{idx + 1}</p>
+                            <p className="text-sm text-slate-300">{qa.question}</p>
+                          </div>
+                          {/* Answer */}
+                          <div className="px-4 py-3">
+                            <div className="flex items-start justify-between gap-3 mb-2">
+                              <p className="text-xs font-semibold text-emerald-400">Your Answer</p>
                               <button
-                                onClick={() => copyToClipboard(value, field.key)}
-                                className={`shrink-0 text-xs px-2 py-1 rounded transition ${
-                                  copied === field.key
-                                    ? 'bg-green-900/40 text-green-400'
-                                    : 'bg-slate-700 hover:bg-slate-600 text-slate-400'
+                                onClick={() => copyAnswer(qa.answer, idx)}
+                                className={`shrink-0 text-xs px-3 py-1 rounded-lg font-medium transition ${
+                                  copiedAnswer === idx
+                                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                    : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
                                 }`}
                               >
-                                {copied === field.key ? 'Copied!' : 'Copy'}
+                                {copiedAnswer === idx ? '✓ Copied!' : '📋 Copy'}
                               </button>
                             </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                  {Object.keys(profile).length === 0 && (
-                    <div className="text-center py-8 text-slate-500 text-sm">
-                      <p>No profile data yet.</p>
-                      <a href="/profile" className="text-violet-400 hover:text-violet-300">Complete your profile →</a>
+                            <p className="text-sm text-slate-200 leading-relaxed">{qa.answer}</p>
+                          </div>
+                        </div>
+                      ))}
+                      <button
+                        onClick={() => { setQaResults([]); setRawQuestions(''); }}
+                        className="w-full py-2 text-xs text-slate-500 hover:text-slate-400 transition"
+                      >
+                        Clear & start over
+                      </button>
                     </div>
                   )}
                 </div>
-              </div>
+              )}
             </div>
           )}
         </div>
