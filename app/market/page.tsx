@@ -4,128 +4,171 @@ import { useState, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 
 const STORAGE_KEY = 'jobpilot_market_report';
+const PROFILE_KEY = 'jobpilot_profile';
 
-const strengths = [
-  { label: 'Cognitive Science Background', score: 95 },
-  { label: 'AI Product Experience', score: 90 },
-  { label: 'Design Systems Expertise', score: 85 },
-  { label: 'Solo Builder / Technical UX', score: 88 },
-];
-
-const gaps = [
-  { label: 'Enterprise Scale Experience', score: 45 },
-  { label: 'B2B Product Design', score: 55 },
-  { label: 'Mobile-first Design Portfolio', score: 60 },
-];
-
-const defaultActions = [
-  { id: 1, text: 'Add 2 AI-focused case studies to portfolio', status: 'pending' as ActionStatus },
-  { id: 2, text: 'Update LinkedIn headline to include "AI UX"', status: 'pending' as ActionStatus },
-  { id: 3, text: 'Request 3 LinkedIn recommendations', status: 'pending' as ActionStatus },
-  { id: 4, text: 'Add GitHub to profile for technical credibility', status: 'pending' as ActionStatus },
-  { id: 5, text: 'Write a post about your AI design workflow', status: 'pending' as ActionStatus },
-];
-
-const profileQuestions = [
-  {
-    id: 1,
-    question: 'What is your proudest design achievement in the last 2 years?',
-    placeholder: 'Describe a project where your design had measurable impact...',
-  },
-  {
-    id: 2,
-    question: 'How do you approach designing for AI/ML products?',
-    placeholder: 'Describe your framework or process...',
-  },
-  {
-    id: 3,
-    question: "What's your vision for the future of UX in an AI-first world?",
-    placeholder: 'Share your perspective...',
-  },
-];
-
-type ActionStatus = 'pending' | 'approved' | 'skipped';
+interface MarketAnalysis {
+  bestFitRoles: {
+    title: string;
+    reasoning: string;
+  }[];
+  targetCompanyTypes: {
+    type: string;
+    whyYouWin: string;
+  }[];
+  marketFitScore: number;
+  linkedinAdvice: {
+    id: string;
+    text: string;
+    priority: 'high' | 'medium' | 'low';
+    status?: 'pending' | 'done' | 'skipped';
+  }[];
+  experienceQuestions: {
+    id: string;
+    question: string;
+    placeholder: string;
+    purpose: string;
+  }[];
+}
 
 interface MarketReport {
-  actions: { id: number; text: string; status: ActionStatus }[];
-  answers: Record<number, string>;
+  analysis: MarketAnalysis;
+  answers: Record<string, string>;
   savedAt: string;
+  profileHash: string;
+}
+
+// Simple hash to detect major profile changes
+function hashProfile(profile: Record<string, unknown>): string {
+  const keyFields = [
+    profile.currentTitle,
+    profile.topSkills,
+    profile.workExperience,
+    profile.targetRoles,
+    profile.differentiation,
+  ];
+  return JSON.stringify(keyFields);
 }
 
 export default function MarketPage() {
   const [hasReport, setHasReport] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [actions, setActions] = useState<{ id: number; text: string; status: ActionStatus }[]>(defaultActions);
-  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [error, setError] = useState<string | null>(null);
+  const [analysis, setAnalysis] = useState<MarketAnalysis | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [profileChanged, setProfileChanged] = useState(false);
 
   // Load saved report on mount
   useEffect(() => {
     const raw = localStorage.getItem(STORAGE_KEY);
+    const profileRaw = localStorage.getItem(PROFILE_KEY);
+    
     if (raw) {
       try {
         const report: MarketReport = JSON.parse(raw);
-        setActions(report.actions);
-        setAnswers(report.answers || {});
+        setAnalysis(report.analysis);
         setSavedAt(report.savedAt);
         setHasReport(true);
+        
+        // Check if profile changed since last analysis
+        if (profileRaw) {
+          const profile = JSON.parse(profileRaw);
+          const currentHash = hashProfile(profile);
+          if (report.profileHash && report.profileHash !== currentHash) {
+            setProfileChanged(true);
+          }
+        }
       } catch {}
     }
   }, []);
 
-  const persist = (
-    updatedActions: typeof actions,
-    updatedAnswers: Record<number, string>
-  ) => {
+  const persist = (updatedAnalysis: MarketAnalysis) => {
+    const profileRaw = localStorage.getItem(PROFILE_KEY);
+    let profileHash = '';
+    if (profileRaw) {
+      try {
+        profileHash = hashProfile(JSON.parse(profileRaw));
+      } catch {}
+    }
+    
     const report: MarketReport = {
-      actions: updatedActions,
-      answers: updatedAnswers,
+      analysis: updatedAnalysis,
+      answers: {},
       savedAt: new Date().toISOString(),
+      profileHash,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(report));
     setSavedAt(report.savedAt);
   };
 
-  const runAnalysis = () => {
+  const runAnalysis = async () => {
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      const fresh = defaultActions.map((a) => ({ ...a, status: 'pending' as ActionStatus }));
-      setActions(fresh);
-      setAnswers({});
+    setError(null);
+    
+    try {
+      const profileRaw = localStorage.getItem(PROFILE_KEY);
+      if (!profileRaw) {
+        throw new Error('No profile found. Please complete your profile first.');
+      }
+      
+      const profile = JSON.parse(profileRaw);
+      
+      const res = await fetch('/api/analyze-market', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profile }),
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to analyze');
+      }
+      
+      const data = await res.json();
+      const newAnalysis: MarketAnalysis = {
+        ...data.analysis,
+        linkedinAdvice: data.analysis.linkedinAdvice.map((a: MarketAnalysis['linkedinAdvice'][0]) => ({
+          ...a,
+          status: 'pending' as const,
+        })),
+      };
+      
+      setAnalysis(newAnalysis);
       setHasReport(true);
-      persist(fresh, {});
-    }, 1500);
+      setProfileChanged(false);
+      persist(newAnalysis);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const clearReport = () => {
     localStorage.removeItem(STORAGE_KEY);
     setHasReport(false);
-    setActions(defaultActions.map((a) => ({ ...a, status: 'pending' as ActionStatus })));
-    setAnswers({});
+    setAnalysis(null);
     setSavedAt(null);
     setShowClearConfirm(false);
+    setProfileChanged(false);
   };
 
-  const setActionStatus = (id: number, status: 'approved' | 'skipped') => {
-    setActions((prev) => {
-      const next = prev.map((a) => (a.id === id ? { ...a, status } : a));
-      persist(next, answers);
-      return next;
-    });
+  const setAdviceStatus = (id: string, status: 'done' | 'skipped') => {
+    if (!analysis) return;
+    const updated = {
+      ...analysis,
+      linkedinAdvice: analysis.linkedinAdvice.map((a) =>
+        a.id === id ? { ...a, status } : a
+      ),
+    };
+    setAnalysis(updated);
+    persist(updated);
   };
 
-  const saveAnswers = () => {
-    persist(actions, answers);
-  };
-
-  const updateAnswer = (id: number, value: string) => {
-    setAnswers((prev) => ({ ...prev, [id]: value }));
-  };
-
-  const pendingCount = actions.filter((a) => a.status === 'pending').length;
-  const approvedCount = actions.filter((a) => a.status === 'approved').length;
+  // Calculate LinkedIn advice visibility
+  const showLinkedinSection = analysis && analysis.marketFitScore < 80;
+  const pendingAdvice = analysis?.linkedinAdvice.filter((a) => a.status === 'pending') || [];
+  const completedAdvice = analysis?.linkedinAdvice.filter((a) => a.status === 'done') || [];
 
   return (
     <AppLayout>
@@ -134,7 +177,7 @@ export default function MarketPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-white">Market Analysis</h1>
-            <p className="text-slate-400 mt-1">Understand your positioning vs. the current market.</p>
+            <p className="text-slate-400 mt-1">Understand your positioning and what makes you stand out.</p>
           </div>
           <div className="flex items-center gap-3">
             {hasReport && (
@@ -179,21 +222,22 @@ export default function MarketPage() {
           </div>
         </div>
 
-        {/* Status banner */}
-        {hasReport && (
-          <div className="flex items-center justify-between bg-violet-900/20 border border-violet-700/40 rounded-xl px-5 py-3">
+        {/* Profile changed banner */}
+        {profileChanged && (
+          <div className="flex items-center justify-between bg-yellow-900/20 border border-yellow-700/40 rounded-xl px-5 py-3">
             <div className="flex items-center gap-3">
-              <span className="text-violet-400">📊</span>
-              <p className="text-sm text-violet-300">
-                <span className="font-semibold">{approvedCount} actions approved</span>
-                {pendingCount > 0 && <span className="text-violet-400"> · {pendingCount} still pending</span>}
+              <span className="text-yellow-400">⚠️</span>
+              <p className="text-sm text-yellow-300">
+                Your profile has changed since the last analysis. Consider re-running for updated insights.
               </p>
             </div>
-            {savedAt && (
-              <p className="text-xs text-slate-500">
-                Last updated {new Date(savedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-              </p>
-            )}
+          </div>
+        )}
+
+        {/* Error state */}
+        {error && (
+          <div className="bg-red-900/20 border border-red-700/40 rounded-xl px-5 py-3">
+            <p className="text-sm text-red-400">{error}</p>
           </div>
         )}
 
@@ -202,7 +246,7 @@ export default function MarketPage() {
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-16 text-center">
             <div className="text-4xl mb-4">📈</div>
             <h3 className="text-lg font-semibold text-slate-300 mb-2">No analysis yet</h3>
-            <p className="text-slate-500 text-sm">Run an analysis to see how you position in the current market.</p>
+            <p className="text-slate-500 text-sm">Run an analysis to discover your best-fit roles and how to position yourself.</p>
           </div>
         )}
 
@@ -211,133 +255,178 @@ export default function MarketPage() {
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-16 text-center">
             <div className="text-4xl mb-4 animate-pulse">📊</div>
             <p className="text-slate-300 font-medium">Analyzing your market position…</p>
+            <p className="text-slate-500 text-sm mt-2">This may take 10-15 seconds</p>
           </div>
         )}
 
-        {hasReport && !loading && (
+        {hasReport && analysis && !loading && (
           <>
-            {/* Your Positioning */}
+            {/* Market Fit Score */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-              <h2 className="text-lg font-semibold text-white mb-6">Your Positioning</h2>
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <h3 className="text-sm font-semibold text-green-400 mb-3 flex items-center gap-2">
-                    <span>✅</span> Strengths vs. Market
-                  </h3>
-                  <div className="space-y-3">
-                    {strengths.map((s) => (
-                      <div key={s.label}>
-                        <div className="flex justify-between text-xs text-slate-400 mb-1">
-                          <span>{s.label}</span>
-                          <span className="text-green-400">{s.score}%</span>
-                        </div>
-                        <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-green-500 rounded-full"
-                            style={{ width: `${s.score}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-white">Market Fit Score</h2>
+                <div className={`text-3xl font-bold ${
+                  analysis.marketFitScore >= 80 ? 'text-green-400' :
+                  analysis.marketFitScore >= 60 ? 'text-yellow-400' : 'text-red-400'
+                }`}>
+                  {analysis.marketFitScore}
                 </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-yellow-400 mb-3 flex items-center gap-2">
-                    <span>⚠️</span> Gaps to Address
-                  </h3>
-                  <div className="space-y-3">
-                    {gaps.map((g) => (
-                      <div key={g.label}>
-                        <div className="flex justify-between text-xs text-slate-400 mb-1">
-                          <span>{g.label}</span>
-                          <span className="text-yellow-400">{g.score}%</span>
-                        </div>
-                        <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-yellow-500 rounded-full"
-                            style={{ width: `${g.score}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
+              </div>
+              <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    analysis.marketFitScore >= 80 ? 'bg-green-500' :
+                    analysis.marketFitScore >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+                  }`}
+                  style={{ width: `${analysis.marketFitScore}%` }}
+                />
+              </div>
+              <p className="text-xs text-slate-500 mt-2">
+                {analysis.marketFitScore >= 80 
+                  ? 'Excellent positioning — you stand out in your target market'
+                  : analysis.marketFitScore >= 60
+                  ? 'Good foundation — some optimizations will strengthen your position'
+                  : 'Room for improvement — follow the recommendations below'}
+              </p>
+            </div>
+
+            {/* Best-Fit Roles */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+              <h2 className="text-lg font-semibold text-white mb-4">🎯 Your Best-Fit Roles</h2>
+              <div className="space-y-4">
+                {analysis.bestFitRoles.map((role, i) => (
+                  <div key={i} className="flex gap-4 p-4 bg-slate-800/50 rounded-xl">
+                    <div className="w-8 h-8 rounded-full bg-violet-600/30 flex items-center justify-center text-violet-300 font-bold text-sm shrink-0">
+                      {i + 1}
+                    </div>
+                    <div>
+                      <h3 className="text-white font-semibold">{role.title}</h3>
+                      <p className="text-slate-400 text-sm mt-1">{role.reasoning}</p>
+                    </div>
                   </div>
-                </div>
+                ))}
               </div>
             </div>
 
-            {/* Recommended Actions */}
+            {/* Target Company Types */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-              <h2 className="text-lg font-semibold text-white mb-6">Recommended Actions</h2>
-              <div className="space-y-3">
-                {actions.map((action) => (
-                  <div
-                    key={action.id}
-                    className={`flex items-center gap-4 p-4 rounded-xl border transition ${
-                      action.status === 'approved'
-                        ? 'bg-green-900/20 border-green-800/50'
-                        : action.status === 'skipped'
-                        ? 'bg-slate-800/50 border-slate-700/50 opacity-50'
-                        : 'bg-slate-800 border-slate-700'
-                    }`}
-                  >
-                    <span className={`text-lg ${action.status === 'approved' ? 'text-green-400' : action.status === 'skipped' ? 'text-slate-500' : 'text-slate-400'}`}>
-                      {action.status === 'approved' ? '✅' : action.status === 'skipped' ? '⏭' : '○'}
-                    </span>
-                    <span className={`flex-1 text-sm ${action.status === 'skipped' ? 'line-through text-slate-500' : 'text-slate-300'}`}>
-                      {action.text}
-                    </span>
-                    {action.status === 'pending' ? (
+              <h2 className="text-lg font-semibold text-white mb-4">🏢 Where You'll Win</h2>
+              <div className="grid gap-4">
+                {analysis.targetCompanyTypes.map((company, i) => (
+                  <div key={i} className="p-4 bg-slate-800/50 rounded-xl border-l-4 border-violet-500">
+                    <h3 className="text-white font-semibold">{company.type}</h3>
+                    <p className="text-slate-400 text-sm mt-2">{company.whyYouWin}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* LinkedIn Advice - only show if score < 80 */}
+            {showLinkedinSection && pendingAdvice.length > 0 && (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold text-white">💼 LinkedIn Optimization</h2>
+                  <span className="text-xs text-slate-500">
+                    {completedAdvice.length} of {analysis.linkedinAdvice.length} completed
+                  </span>
+                </div>
+                <div className="space-y-3">
+                  {pendingAdvice.map((advice) => (
+                    <div
+                      key={advice.id}
+                      className="flex items-center gap-4 p-4 bg-slate-800 border border-slate-700 rounded-xl"
+                    >
+                      <span className={`text-xs px-2 py-1 rounded font-semibold ${
+                        advice.priority === 'high' ? 'bg-red-500/20 text-red-400' :
+                        advice.priority === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                        'bg-slate-700 text-slate-400'
+                      }`}>
+                        {advice.priority}
+                      </span>
+                      <span className="flex-1 text-sm text-slate-300">{advice.text}</span>
                       <div className="flex gap-2">
                         <button
-                          onClick={() => setActionStatus(action.id, 'approved')}
+                          onClick={() => setAdviceStatus(advice.id, 'done')}
                           className="p-1.5 rounded-lg bg-green-900/40 hover:bg-green-900/60 text-green-400 transition text-xs font-semibold"
-                          title="Approve"
+                          title="Mark done"
                         >✓</button>
                         <button
-                          onClick={() => setActionStatus(action.id, 'skipped')}
+                          onClick={() => setAdviceStatus(advice.id, 'skipped')}
                           className="p-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-400 transition text-xs font-semibold"
                           title="Skip"
                         >✗</button>
                       </div>
-                    ) : (
-                      <button
-                        onClick={() => setActionStatus(action.id, action.status === 'approved' ? 'skipped' : 'approved')}
-                        className="text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-400 hover:text-white transition"
-                      >
-                        Undo
-                      </button>
-                    )}
-                  </div>
-                ))}
+                    </div>
+                  ))}
+                </div>
+                {completedAdvice.length > 0 && (
+                  <details className="mt-4">
+                    <summary className="text-xs text-slate-500 cursor-pointer hover:text-slate-400">
+                      View {completedAdvice.length} completed item{completedAdvice.length > 1 ? 's' : ''}
+                    </summary>
+                    <div className="space-y-2 mt-3">
+                      {completedAdvice.map((advice) => (
+                        <div
+                          key={advice.id}
+                          className="flex items-center gap-3 p-3 bg-green-900/10 border border-green-800/30 rounded-lg opacity-70"
+                        >
+                          <span className="text-green-400">✓</span>
+                          <span className="flex-1 text-sm text-slate-400 line-through">{advice.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
               </div>
-            </div>
+            )}
 
-            {/* Profile Questions */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-              <h2 className="text-lg font-semibold text-white mb-2">Profile Questions</h2>
-              <p className="text-slate-500 text-sm mb-6">Answer these to strengthen your profile narrative. Answers are saved automatically.</p>
-              <div className="space-y-5">
-                {profileQuestions.map((q) => (
-                  <div key={q.id}>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">
-                      {q.id}. {q.question}
-                    </label>
-                    <textarea
-                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition text-sm resize-none h-24"
-                      placeholder={q.placeholder}
-                      value={answers[q.id] || ''}
-                      onChange={(e) => updateAnswer(q.id, e.target.value)}
-                    />
-                  </div>
-                ))}
-                <button
-                  onClick={saveAnswers}
-                  className="px-5 py-2.5 bg-violet-600 hover:bg-violet-500 text-white font-semibold rounded-xl text-sm transition"
-                >
-                  Save Answers
-                </button>
+            {/* Score >= 80 but has completed LinkedIn advice */}
+            {analysis.marketFitScore >= 80 && completedAdvice.length > 0 && (
+              <div className="bg-green-900/10 border border-green-800/30 rounded-2xl p-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-green-400 text-xl">✨</span>
+                  <h2 className="text-lg font-semibold text-green-300">LinkedIn Optimized</h2>
+                </div>
+                <p className="text-sm text-slate-400">
+                  You've completed {completedAdvice.length} improvement{completedAdvice.length > 1 ? 's' : ''}. 
+                  Your score is {analysis.marketFitScore}% — no further LinkedIn optimization needed.
+                </p>
               </div>
-            </div>
+            )}
+
+            {/* Experience Deep-Dive — Link to Stories */}
+            {analysis.experienceQuestions.length > 0 && (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-white mb-1">📖 Experience Deep-Dive</h2>
+                    <p className="text-slate-500 text-sm">
+                      {analysis.experienceQuestions.length} AI-generated questions based on your profile.
+                      Answer them to power better cover letters and interview prep.
+                    </p>
+                  </div>
+                  <a
+                    href="/stories"
+                    className="px-5 py-2.5 bg-violet-600 hover:bg-violet-500 text-white font-semibold rounded-xl text-sm transition shrink-0"
+                  >
+                    Answer in Stories →
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {/* Last updated */}
+            {savedAt && (
+              <p className="text-center text-xs text-slate-500">
+                Last analyzed {new Date(savedAt).toLocaleDateString('en-US', { 
+                  month: 'short', 
+                  day: 'numeric', 
+                  year: 'numeric',
+                  hour: 'numeric',
+                  minute: '2-digit'
+                })}
+              </p>
+            )}
           </>
         )}
       </div>

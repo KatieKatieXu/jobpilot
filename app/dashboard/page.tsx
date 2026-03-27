@@ -186,8 +186,10 @@ export default function DashboardPage() {
     setActivity(items.slice(0, 6));
   }, []);
 
+  const jobsAvailable = TOTAL_JOBS - appliedCount;
+
   const statCards = [
-    { label: 'Jobs Available', value: String(TOTAL_JOBS), icon: '💼', color: 'text-violet-400', href: '/jobs' },
+    { label: 'Jobs Available', value: String(jobsAvailable), icon: '💼', color: 'text-violet-400', href: '/jobs' },
     { label: 'Applications', value: String(appliedCount), icon: '📤', color: 'text-blue-400', href: '/applications' },
     { label: 'Interviews', value: String(interviewCount), icon: '📞', color: 'text-green-400', href: '/applications' },
     { label: 'Profile', value: `${profileStrength}%`, icon: '⚡', color: profileStrength >= 80 ? 'text-green-400' : profileStrength >= 50 ? 'text-yellow-400' : 'text-red-400', href: '/profile' },
@@ -240,56 +242,98 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        {/* Onboarding journey strip */}
-        {(profileStrength < 80 || !hasResume || !hasMarket || appliedCount === 0) && (() => {
-          const steps = [
-            { label: 'Build Profile', done: profileStrength >= 70, href: '/profile' },
-            { label: 'Revise Resume', done: hasResume, href: '/resume' },
-            { label: 'Market Analysis', done: hasMarket, href: '/market' },
-            { label: 'Apply to Jobs', done: appliedCount > 0, href: '/jobs' },
-          ];
-          const activeIdx = steps.findIndex((s) => !s.done);
-          return (
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-              <div className="flex items-center justify-between">
-                {steps.map((step, i) => (
-                  <div key={step.label} className="flex items-center flex-1 last:flex-initial">
-                    <div className="flex flex-col items-center gap-1.5">
-                      {step.done ? (
-                        <div className="w-8 h-8 rounded-full bg-green-500/20 border-2 border-green-500 flex items-center justify-center text-green-400 text-sm font-bold">
-                          ✓
-                        </div>
-                      ) : (
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2 ${
-                          i === activeIdx
-                            ? 'bg-violet-600/20 border-violet-500 text-violet-300'
-                            : 'bg-slate-800 border-slate-700 text-slate-500'
-                        }`}>
-                          {i + 1}
-                        </div>
-                      )}
-                      <span className={`text-xs font-medium ${
-                        step.done ? 'text-green-400' : i === activeIdx ? 'text-violet-300' : 'text-slate-500'
-                      }`}>
-                        {step.label}
-                      </span>
-                      {!step.done && (
-                        <Link href={step.href} className="text-[10px] text-violet-400 hover:text-violet-300 transition font-medium">
-                          → Do it
-                        </Link>
-                      )}
-                    </div>
-                    {i < steps.length - 1 && (
-                      <div className={`flex-1 h-0.5 mx-3 mt-[-18px] rounded ${
-                        step.done ? 'bg-green-500/40' : 'bg-slate-700'
-                      }`} />
-                    )}
+        {/* Workflow diagram — horizontal main flow with feedback loops */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8">
+          
+          {/* Main horizontal row: Profile (with Stories/Resume) → Market → Apply → Interview */}
+          <div className="flex items-center justify-center gap-6">
+            
+            {/* Profile panel containing Stories, Profile, Resume */}
+            <div className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-4">
+              <div className="flex flex-col items-center gap-2">
+                {/* Stories */}
+                <Link href="/stories" className="group">
+                  <div className="w-24 py-2 rounded-lg border-2 border-dashed bg-slate-800/40 border-violet-500/50 hover:border-violet-400 text-center transition">
+                    <span className="text-base">📖</span>
+                    <p className="text-xs font-medium text-violet-300">Stories</p>
                   </div>
-                ))}
+                </Link>
+                
+                {/* Recycle circle connector */}
+                <div className="text-violet-500/70 text-lg">↻</div>
+                
+                {/* Profile (main node) */}
+                <Link href="/profile" className="group">
+                  <div className={`w-32 py-4 rounded-xl border-2 text-center transition ${
+                    profileStrength >= 70 ? 'bg-green-500/10 border-green-500/50' : 'bg-violet-600/20 border-violet-500 shadow-lg shadow-violet-500/20'
+                  }`}>
+                    <span className="text-2xl">{profileStrength >= 70 ? '✓' : '👤'}</span>
+                    <p className={`text-sm font-semibold mt-1 ${profileStrength >= 70 ? 'text-green-400' : 'text-violet-300'}`}>Profile</p>
+                  </div>
+                </Link>
+                
+                {/* Recycle circle connector */}
+                <div className="text-violet-500/70 text-lg">↻</div>
+                
+                {/* Resume */}
+                <Link href="/resume" className="group">
+                  <div className={`w-24 py-2 rounded-lg border-2 border-dashed text-center transition ${
+                    hasResume ? 'bg-green-500/10 border-green-500/50' : 'bg-slate-800/40 border-violet-500/50 hover:border-violet-400'
+                  }`}>
+                    <span className="text-base">{hasResume ? '✓' : '📄'}</span>
+                    <p className="text-xs font-medium text-violet-300">Resume</p>
+                  </div>
+                </Link>
               </div>
             </div>
-          );
-        })()}
+            
+            {/* Arrow */}
+            <div className="text-violet-500 text-2xl self-center">→</div>
+            
+            {/* Market */}
+            <Link href="/market" className="group self-center">
+              <div className={`w-32 py-4 rounded-xl border-2 text-center transition ${
+                hasMarket ? 'bg-green-500/10 border-green-500/50' : 'bg-slate-800/80 border-slate-700 hover:border-violet-500'
+              }`}>
+                <span className="text-2xl">{hasMarket ? '✓' : '📈'}</span>
+                <p className="text-sm font-semibold text-slate-300 mt-1">Market</p>
+              </div>
+            </Link>
+            
+            {/* Arrow */}
+            <div className="text-violet-500 text-2xl self-center">→</div>
+            
+            {/* Apply */}
+            <Link href="/jobs" className="group self-center">
+              <div className={`w-32 py-4 rounded-xl border-2 text-center transition ${
+                appliedCount > 0 ? 'bg-green-500/10 border-green-500/50' : 'bg-slate-800/80 border-slate-700 hover:border-violet-500'
+              }`}>
+                <span className="text-2xl">{appliedCount > 0 ? '✓' : '💼'}</span>
+                <p className="text-sm font-semibold text-slate-300 mt-1">Apply</p>
+              </div>
+            </Link>
+            
+            {/* Arrow */}
+            <div className="text-violet-500 text-2xl self-center">→</div>
+            
+            {/* Interview */}
+            <Link href="/applications" className="group self-center">
+              <div className="w-32 py-4 rounded-xl border-2 bg-slate-800/80 border-slate-700 hover:border-violet-500 text-center transition">
+                <span className="text-2xl">🎯</span>
+                <p className="text-sm font-semibold text-slate-300 mt-1">Interview</p>
+              </div>
+            </Link>
+            
+          </div>
+          
+          {/* Bottom label */}
+          <div className="text-center mt-6">
+            <p className="text-xs text-slate-500">
+              Every update to <span className="text-violet-400">Stories</span> & <span className="text-violet-400">Resume</span> strengthens your Profile
+            </p>
+          </div>
+          
+        </div>
 
         {/* Stat cards */}
         <div className="grid grid-cols-4 gap-4">

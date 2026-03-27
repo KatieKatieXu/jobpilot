@@ -349,8 +349,8 @@ export default function ResumePage() {
       <div className="max-w-4xl mx-auto">
         {/* Page header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Resume Reviser</h1>
-          <p className="text-slate-400">AI-powered resume analysis and optimization for senior design & AI roles.</p>
+          <h1 className="text-2xl font-bold text-white">Resume Reviser</h1>
+          <p className="text-slate-400 mt-1">AI-powered resume analysis and optimization.</p>
         </div>
 
         {/* Step indicator — only show for upload/review/export flow */}

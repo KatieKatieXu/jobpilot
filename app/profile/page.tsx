@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import ResumeUpload from '@/components/ResumeUpload';
-import ExperienceBank from '@/components/ExperienceBank';
+import Link from 'next/link';
 
 const ROLE_TYPES = [
   'Senior Designer',
@@ -365,9 +365,24 @@ export default function ProfilePage() {
               })()}
             </div>
 
-            {/* Experience Bank */}
+            {/* Link to Stories */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-              <ExperienceBank />
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-semibold text-white flex items-center gap-2">
+                    <span>📖</span> Stories
+                  </h2>
+                  <p className="text-sm text-slate-500 mt-1">
+                    Your career stories for interviews and applications.
+                  </p>
+                </div>
+                <Link
+                  href="/stories"
+                  className="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold rounded-lg transition"
+                >
+                  View Stories →
+                </Link>
+              </div>
             </div>
           </div>
         </div>
@@ -617,9 +632,24 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Experience Bank — always accessible in edit view */}
+        {/* Link to Stories — always accessible in edit view */}
         <div className="mt-8 bg-slate-900 border border-slate-800 rounded-2xl p-6">
-          <ExperienceBank />
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-white flex items-center gap-2">
+                <span>📖</span> Stories
+              </h2>
+              <p className="text-sm text-slate-500 mt-1">
+                Your career stories for interviews and applications.
+              </p>
+            </div>
+            <Link
+              href="/stories"
+              className="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold rounded-lg transition"
+            >
+              View Stories →
+            </Link>
+          </div>
         </div>
       </div>
     </AppLayout>

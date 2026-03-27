@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import AppLayout from '@/components/AppLayout';
 
 interface Application {
@@ -30,6 +30,64 @@ const seedApplications: Application[] = [
     status: 'applied',
   },
 ];
+
+// Custom dropdown component for status change
+function StatusDropdown({ 
+  currentStatus, 
+  onMove 
+}: { 
+  currentStatus: Column; 
+  onMove: (status: Column) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+  
+  const currentCol = columns.find((c) => c.id === currentStatus);
+  const otherCols = columns.filter((c) => c.id !== currentStatus);
+  
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-400 hover:border-violet-500 transition flex items-center justify-between"
+      >
+        <span>Move to →</span>
+        <span className="text-[10px]">{isOpen ? '▲' : '▼'}</span>
+      </button>
+      
+      {isOpen && (
+        <div className="absolute bottom-full left-0 right-0 mb-1 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 overflow-hidden">
+          {otherCols.map((col) => (
+            <button
+              key={col.id}
+              onClick={() => {
+                onMove(col.id);
+                setIsOpen(false);
+              }}
+              className="w-full px-3 py-2 text-xs text-slate-300 hover:bg-violet-600 hover:text-white transition text-left flex items-center gap-2"
+            >
+              <span>{col.icon}</span>
+              <span>{col.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ApplicationsPage() {
   const [apps, setApps] = useState<Application[]>(seedApplications);
@@ -117,19 +175,10 @@ export default function ApplicationsPage() {
                         {app.date}
                       </div>
                       {/* Move dropdown */}
-                      <select
-                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-400 focus:outline-none focus:border-violet-500 cursor-pointer"
-                        value={app.status}
-                        onChange={(e) => moveApp(app.id, e.target.value as Column)}
-                      >
-                        <option value="" disabled>Move to →</option>
-                        {columns.filter((c) => c.id !== app.status).map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.icon} {c.label}
-                          </option>
-                        ))}
-                        <option value={app.status} disabled>— current —</option>
-                      </select>
+                      <StatusDropdown
+                        currentStatus={app.status}
+                        onMove={(newStatus) => moveApp(app.id, newStatus)}
+                      />
                     </div>
                   ))}
                 </div>
