@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { rateLimitResponse } from '../../lib/rate-limit';
 
 export interface MarketAnalysis {
   bestFitRoles: {
@@ -110,6 +111,10 @@ function formatProfileForAnalysis(profile: ProfileData): string {
 }
 
 export async function POST(req: NextRequest) {
+  // Rate limit: 5 AI actions per day per IP
+  const limited = rateLimitResponse(req, { maxRequests: 5 });
+  if (limited) return limited;
+
   try {
     const { profile } = await req.json();
 
@@ -130,7 +135,7 @@ export async function POST(req: NextRequest) {
     const client = new Anthropic({ apiKey });
 
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-4-6',
       max_tokens: 4096,
       messages: [
         {

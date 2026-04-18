@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { rateLimitResponse } from '../../lib/rate-limit';
 
 export interface QAResult {
   question: string;
@@ -107,6 +108,10 @@ function parseQuestions(raw: string): string[] {
 }
 
 export async function POST(req: NextRequest) {
+  // Rate limit: 5 AI actions per day per IP
+  const limited = rateLimitResponse(req, { maxRequests: 5 });
+  if (limited) return limited;
+
   try {
     const { rawQuestions, profile, job, experienceBank } = await req.json();
 
@@ -129,7 +134,7 @@ export async function POST(req: NextRequest) {
     const userPrompt = buildUserPrompt(questions, profile || {}, job || { company: '', role: '' }, experienceBank || []);
 
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-4-6',
       max_tokens: 2048,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userPrompt }],
