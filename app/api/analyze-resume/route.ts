@@ -36,8 +36,8 @@ The resume to analyze:
 `;
 
 export async function POST(req: NextRequest) {
-  // Rate limit: 5 AI actions per day per IP
-  const limited = rateLimitResponse(req, { maxRequests: 5 });
+  // Rate limit: auto-detects tier (free: 3/day, pro: 30/day, premium: unlimited)
+  const limited = rateLimitResponse(req);
   if (limited) return limited;
 
   try {

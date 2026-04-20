@@ -1,10 +1,42 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 
 export default function SettingsPage() {
   const [cleared, setCleared] = useState(false);
+  const [upgrading, setUpgrading] = useState(false);
+  const [currentTier, setCurrentTier] = useState<'free' | 'pro' | 'premium'>('free');
+  const searchParams = useSearchParams();
+  const canceled = searchParams.get('canceled');
+
+  useEffect(() => {
+    // Read tier from cookie
+    const match = document.cookie.match(/jobpilot_tier=(free|pro|premium)/);
+    if (match) setCurrentTier(match[1] as 'free' | 'pro' | 'premium');
+  }, []);
+
+  const handleUpgrade = async (tier: 'pro' | 'premium') => {
+    setUpgrading(true);
+    try {
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tier }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(data.error || 'Failed to start checkout');
+        setUpgrading(false);
+      }
+    } catch {
+      alert('Failed to connect to payment service');
+      setUpgrading(false);
+    }
+  };
 
   const exportProfile = () => {
     const profile = localStorage.getItem('jobpilot_profile');
@@ -40,6 +72,88 @@ export default function SettingsPage() {
         <div>
           <h1 className="text-2xl font-bold text-white">Settings</h1>
           <p className="text-slate-400 mt-1">Manage your Jobpilot data.</p>
+        </div>
+
+        {/* Subscription */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+          <h2 className="text-base font-semibold text-white">Subscription</h2>
+
+          {canceled && (
+            <div className="p-3 bg-yellow-900/20 border border-yellow-700/30 rounded-lg text-yellow-400 text-sm">
+              Checkout was canceled. You can try again anytime.
+            </div>
+          )}
+
+          {currentTier !== 'free' && (
+            <div className="p-4 bg-violet-900/20 border border-violet-700/30 rounded-xl">
+              <p className="text-sm font-medium text-violet-300">
+                ✨ You&apos;re on the {currentTier === 'pro' ? 'Pro' : 'Premium'} plan
+              </p>
+              <p className="text-xs text-slate-500 mt-1">
+                {currentTier === 'pro' ? '30 AI actions/day' : 'Unlimited AI actions'}
+              </p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Pro tier */}
+            <div className={`p-4 rounded-xl border ${currentTier === 'pro' ? 'bg-violet-900/10 border-violet-700/40' : 'bg-slate-800 border-slate-700'}`}>
+              <div className="flex items-baseline gap-1 mb-1">
+                <span className="text-lg font-bold text-white">$24</span>
+                <span className="text-xs text-slate-500">/month</span>
+              </div>
+              <p className="text-sm font-medium text-white mb-1">Pro</p>
+              <ul className="text-xs text-slate-400 space-y-1 mb-4">
+                <li>• 30 AI actions/day</li>
+                <li>• Unlimited stories</li>
+                <li>• Application tracker</li>
+                <li>• Resume export</li>
+              </ul>
+              {currentTier === 'free' ? (
+                <button
+                  onClick={() => handleUpgrade('pro')}
+                  disabled={upgrading}
+                  className="w-full px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition"
+                >
+                  {upgrading ? 'Redirecting...' : 'Upgrade to Pro'}
+                </button>
+              ) : currentTier === 'pro' ? (
+                <span className="block text-center text-xs text-violet-400 font-medium">Current plan</span>
+              ) : null}
+            </div>
+
+            {/* Premium tier */}
+            <div className={`p-4 rounded-xl border ${currentTier === 'premium' ? 'bg-violet-900/10 border-violet-700/40' : 'bg-slate-800 border-slate-700'}`}>
+              <div className="flex items-baseline gap-1 mb-1">
+                <span className="text-lg font-bold text-white">$39</span>
+                <span className="text-xs text-slate-500">/month</span>
+              </div>
+              <p className="text-sm font-medium text-white mb-1">Premium</p>
+              <ul className="text-xs text-slate-400 space-y-1 mb-4">
+                <li>• Unlimited AI actions</li>
+                <li>• Everything in Pro</li>
+                <li>• Interview prep AI</li>
+                <li>• Negotiation scripts</li>
+              </ul>
+              {currentTier !== 'premium' ? (
+                <button
+                  onClick={() => handleUpgrade('premium')}
+                  disabled={upgrading}
+                  className="w-full px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition"
+                >
+                  {upgrading ? 'Redirecting...' : 'Upgrade to Premium'}
+                </button>
+              ) : (
+                <span className="block text-center text-xs text-violet-400 font-medium">Current plan</span>
+              )}
+            </div>
+          </div>
+
+          {currentTier === 'free' && (
+            <p className="text-xs text-slate-600">
+              Free plan: 3 AI actions/day. Upgrade anytime to unlock more.
+            </p>
+          )}
         </div>
 
         {/* Data management */}

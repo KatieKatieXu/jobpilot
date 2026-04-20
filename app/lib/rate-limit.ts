@@ -1,10 +1,14 @@
 /**
- * Simple in-memory rate limiter for AI API routes.
+ * Tiered in-memory rate limiter for AI API routes.
  *
  * Tracks usage per IP address with a daily reset.
- * Free users get a limited number of AI actions per day.
+ * Supports multiple tiers:
+ *   - Free (no auth): 3 AI actions/day
+ *   - Pro ($24/month): 30 AI actions/day
+ *   - Premium ($39/month): unlimited
+ *
  * This keeps API costs predictable while still letting
- * people experience the product.
+ * free users experience enough value to convert.
  *
  * For production at scale, swap this for Redis-backed
  * rate limiting (e.g., @upstash/ratelimit).
@@ -111,30 +115,76 @@ export function getClientIp(req: Request): string {
   return 'unknown';
 }
 
+/** Tier definitions — adjust limits here */
+export type UserTier = 'free' | 'pro' | 'premium';
+
+const TIER_LIMITS: Record<UserTier, number> = {
+  free: 3,      // 3 AI actions/day — enough for one full workflow
+  pro: 30,      // 30 AI actions/day — generous for $24/month
+  premium: 9999, // effectively unlimited for $39/month
+};
+
+/**
+ * Determine the user's tier from the request.
+ *
+ * Right now this checks a simple header/cookie. When you add
+ * Stripe + auth, replace this with a real user lookup.
+ * For now, everyone is "free" unless they have a tier cookie.
+ */
+function getUserTier(req: Request): UserTier {
+  // Check for tier cookie (set after Stripe checkout / login)
+  const cookieHeader = req.headers.get('cookie') || '';
+  const tierMatch = cookieHeader.match(/jobpilot_tier=(free|pro|premium)/);
+  if (tierMatch) {
+    return tierMatch[1] as UserTier;
+  }
+
+  // Check for auth header (for API/testing)
+  const tierHeader = req.headers.get('x-jobpilot-tier');
+  if (tierHeader && tierHeader in TIER_LIMITS) {
+    return tierHeader as UserTier;
+  }
+
+  return 'free';
+}
+
 /**
  * Convenience: check rate limit and return a 429 Response if exceeded.
  * Returns null if the request is allowed.
+ * Automatically detects the user's tier and applies the right limit.
  */
 export function rateLimitResponse(
   req: Request,
-  config: RateLimitConfig = { maxRequests: 5 }
+  config?: RateLimitConfig
 ): Response | null {
+  const tier = getUserTier(req);
+  const maxRequests = config?.maxRequests ?? TIER_LIMITS[tier];
+
   const ip = getClientIp(req);
-  const result = checkRateLimit(ip, config);
+  // Use tier in the key so upgrading immediately grants more actions
+  const identifier = `${ip}:${tier}`;
+  const result = checkRateLimit(identifier, { maxRequests, windowMs: config?.windowMs });
 
   if (!result.allowed) {
     const resetDate = new Date(result.resetAt);
+    const upgradeHint = tier === 'free'
+      ? ' Upgrade to Pro for 30 AI actions/day.'
+      : tier === 'pro'
+        ? ' Upgrade to Premium for unlimited actions.'
+        : '';
+
     return new Response(
       JSON.stringify({
         error: 'Rate limit exceeded',
-        message: `You've used all ${config.maxRequests} AI actions for today. Resets at ${resetDate.toISOString()}.`,
+        message: `You've used all ${maxRequests} AI actions for today.${upgradeHint} Resets at ${resetDate.toISOString()}.`,
+        tier,
         resetAt: result.resetAt,
       }),
       {
         status: 429,
         headers: {
           'Content-Type': 'application/json',
-          'X-RateLimit-Limit': String(config.maxRequests),
+          'X-RateLimit-Limit': String(maxRequests),
           'X-RateLimit-Remaining': '0',
           'X-RateLimit-Reset': String(result.resetAt),
           'Retry-After': String(Math.ceil((result.resetAt - Date.now()) / 1000)),
