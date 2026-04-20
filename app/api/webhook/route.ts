@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2025-02-24.acacia',
-});
-
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
+function getStripe() {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error('STRIPE_SECRET_KEY not configured');
+  return new Stripe(key, { apiVersion: '2025-02-24.acacia' });
+}
 
 /**
  * Stripe webhook handler.
@@ -20,6 +20,9 @@ const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
  */
 export async function POST(req: NextRequest) {
   try {
+    const stripe = getStripe();
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
+
     const body = await req.text();
     const sig = req.headers.get('stripe-signature');
 
