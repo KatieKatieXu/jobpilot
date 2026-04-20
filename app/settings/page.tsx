@@ -1,20 +1,22 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 
 export default function SettingsPage() {
   const [cleared, setCleared] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
   const [currentTier, setCurrentTier] = useState<'free' | 'pro' | 'premium'>('free');
-  const searchParams = useSearchParams();
-  const canceled = searchParams.get('canceled');
+  const [canceled, setCanceled] = useState(false);
 
   useEffect(() => {
     // Read tier from cookie
     const match = document.cookie.match(/jobpilot_tier=(free|pro|premium)/);
     if (match) setCurrentTier(match[1] as 'free' | 'pro' | 'premium');
+
+    // Check URL for canceled param (avoid useSearchParams to skip Suspense requirement)
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('canceled')) setCanceled(true);
   }, []);
 
   const handleUpgrade = async (tier: 'pro' | 'premium') => {
