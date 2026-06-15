@@ -130,7 +130,7 @@ export default function ProfilePage() {
 
   const clearProfile = async () => {
     await clearAllData(supabase);
-    setProfile(defaultProfile);
+    setProfile(emptyProfile);
     setHasExistingProfile(false);
     setHasResumeReport(false);
     setHasMarketReport(false);
