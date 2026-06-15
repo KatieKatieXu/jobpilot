@@ -113,10 +113,10 @@ export default function DashboardPage() {
 
       // Applied jobs → activity entries
       apps.forEach((app: Application) => {
-        const dateStr = app.date || (app as Record<string, string>).appliedAt || new Date().toISOString();
+        const dateStr = app.date || (app as unknown as Record<string, string>).appliedAt || new Date().toISOString();
         const ts = new Date(dateStr).getTime();
         items.push({
-          text: `Applied to ${app.role || (app as Record<string, string>).jobTitle} at ${app.company}`,
+          text: `Applied to ${app.role || (app as unknown as Record<string, string>).jobTitle} at ${app.company}`,
           time: timeAgo(dateStr),
           icon: '📤',
           ts,
