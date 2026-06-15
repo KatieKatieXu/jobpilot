@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
+    "@supabase/ssr": "^0.10.3",
     "@types/pdf-parse": "^1.1.5",
     "next": "16.2.0",
     "pdf-parse": "^1.1.1",

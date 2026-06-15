@@ -108,6 +108,49 @@ function extractFields(text: string): Record<string, string> {
     (l) => /^[A-Z][a-z]+ [A-Z][a-z]+/.test(l) && l.split(' ').length <= 4
   );
 
+  // Extract current title — typically the line right after the name, or a line with common title keywords
+  const nameIdx = nameLine ? lines.indexOf(nameLine) : -1;
+  let currentTitle = '';
+  if (nameIdx >= 0 && nameIdx + 1 < lines.length) {
+    const nextLine = lines[nameIdx + 1];
+    // If the next line looks like a title (not an email/phone/url), use it
+    if (nextLine && !/[@()\d{3}]/.test(nextLine) && !nextLine.includes('http') && nextLine.length < 80) {
+      currentTitle = nextLine;
+    }
+  }
+  // Fallback: look for common title patterns anywhere
+  if (!currentTitle) {
+    const titlePatterns = /\b(senior|staff|principal|lead|director|vp|manager|head of|chief)\b.*\b(designer|engineer|developer|product|ux|ui|architect|analyst|scientist|consultant)\b/i;
+    const titleLine = lines.find((l) => titlePatterns.test(l) && l.length < 80);
+    if (titleLine) currentTitle = titleLine;
+  }
+
+  // Extract years of experience — look for "X+ years" or "X years of experience" patterns
+  let yearsExperience = '';
+  const yearsMatch = text.match(/(\d{1,2})\+?\s*years?\s*(of\s*)?(professional\s*)?(experience|in\b)/i);
+  if (yearsMatch) {
+    yearsExperience = yearsMatch[1];
+  } else {
+    // Fallback: count from earliest date in work experience section
+    const expIdx = lines.findIndex((l) => /^(work\s)?experience/i.test(l));
+    if (expIdx !== -1) {
+      const expSection = lines.slice(expIdx, expIdx + 60).join(' ');
+      const yearMatches = expSection.match(/\b(19|20)\d{2}\b/g);
+      if (yearMatches && yearMatches.length > 0) {
+        const earliest = Math.min(...yearMatches.map(Number));
+        const years = new Date().getFullYear() - earliest;
+        if (years > 0 && years < 50) yearsExperience = String(years);
+      }
+    }
+  }
+
+  // Extract location — look for "City, State" or "City, ST" patterns
+  let location = '';
+  const locationMatch = text.match(/\b([A-Z][a-z]+(?:\s[A-Z][a-z]+)?),\s*([A-Z]{2})\b/);
+  if (locationMatch) {
+    location = locationMatch[0];
+  }
+
   const expIdx = lines.findIndex((l) => /^(work\s)?experience/i.test(l));
   const summaryChunk =
     expIdx !== -1
@@ -121,6 +164,9 @@ function extractFields(text: string): Record<string, string> {
     linkedin: linkedinMatch ? `https://www.${linkedinMatch[0]}` : '',
     github: githubMatch ? `https://www.${githubMatch[0]}` : '',
     website: websiteMatch?.[0] || '',
+    currentTitle,
+    yearsExperience,
+    location,
     experienceSummary: summaryChunk,
   };
 }

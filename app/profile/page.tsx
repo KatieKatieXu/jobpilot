@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import ResumeUpload from '@/components/ResumeUpload';
 import Link from 'next/link';
+import { useSupabase } from '@/app/hooks/useSupabase';
+import { getProfile, saveProfile, clearAllData } from '@/app/lib/db';
 
 const ROLE_TYPES = [
   'Senior Designer',
@@ -37,53 +39,23 @@ interface ProfileData {
   openToRelocation: string;
 }
 
-const defaultProfile: ProfileData = {
-  fullName: 'Katie Xu',
-  currentTitle: 'VP & Design Lead',
-  yearsExperience: '7',
-  location: 'New York, NY',
-  linkedinUrl: 'https://linkedin.com/in/katherinexu99',
-  portfolioUrl: 'https://www.katexu.com',
-  githubUrl: 'https://github.com/KatieKatieXu',
-  workExperience: `Bank of America — VP & Design Lead (Feb 2023–Present)
-Led 2 designers; reduced avg order submission time 40%, decreased support tickets 20% by optimizing complex cloud platform workflows. Initiated portal interface redesign; built strategic interaction design with cross-functional teams.
-
-Little Red Book — Asst. VP & UX Designer (Dec 2020–Aug 2021)
-100% of users found renewed design helpful. Cloud hosting apps grew 200→1000+. Built design systems across platform.
-
-pawpawStory — UX Designer (Jun 2018–Dec 2020)
-NPS increased 5→36 by redesigning ordering process. User base grew 200%+ in first quarter after redesign.
-
-pawpawStory — Solo AI Product Builder (Dec 2025–Present)
-0→App Store in 4 weeks. iOS AI storytelling app for kids using ElevenLabs voice cloning + LLMs. Figma→Cursor MCP multi-agent workflow.
-
-Gen AI Product Design Creator (Jan 2026–Present)
-10,000+ active interactions in 3 weeks. Content on AI workflows, Vibe Coding, AI-native product building.
-
-ionboard — Design & Marketing Lead (Aug 2017–Sept 2018)
-Kickstarter: $57,132 raised in 24hrs. 1st place UCSD The Basement pitch. CES 2018 exhibitor.`,
-  topSkills: 'AI-native product design, Design systems, User research & strategy',
-  differentiation: `Rare combination of 7+ years enterprise UX (Bank of America scale) + solo AI product builder (shipped iOS app in 4 weeks). I bridge design craft with technical execution using AI tools — Figma to production via Cursor MCP, voice cloning, LLM integration. Cognitive science background + bilingual (EN/ZH) gives me deep empathy for diverse user bases.`,
-  sideProjects: `Solo AI Product Builder — 4 products shipped (Dec 2025–Present):
-
-• Jobpilot (Mar 2026): AI job hunting tool — resume AI revision, job matching by interview probability, form auto-fill, tracker. Next.js + Claude API + Figma→Cursor MCP.
-
-• OneCo (Mar 2026): One-person company personality quiz — 10Q talent profiler, 4-language i18n (EN/ZH/ES/FR), funnels to Jobpilot. Built as 小红书 content-to-product funnel.
-
-• Mission Control (Mar 2026): Personal AI agent command center — live animated pixel-art office, subagent management, cron jobs, memory viewer. Next.js + OpenClaw runtime.
-
-• katexu.com (2025–2026): Interactive space-themed portfolio — 3D card effects, Framer Motion, case studies. Built with Figma MCP + Cursor.
-
-• pawpawStory (Dec 2025): iOS AI storytelling app for kids — 0→App Store in 4 weeks. React Native + ElevenLabs voice cloning + LLM.
-
-ionboard: Electric skateboard startup — Kickstarter $57K in 24hrs, CES 2018, UCSD Accelerator
-Gen AI Creator: 10K+ community interactions in 3 weeks
-Awards: Grace Hopper 2018 Co-Speaker, Be the Change Leadership Award`,
-  targetCompensation: '$190K+ base',
-  targetRoles: ['Senior Designer', 'Staff Designer', 'Principal', 'AI UX'],
-  workStyle: ['Hybrid'],
-  specialRequests: 'AI-native companies preferred. Open to startups with strong product vision.',
-  openToRelocation: 'no',
+const emptyProfile: ProfileData = {
+  fullName: '',
+  currentTitle: '',
+  yearsExperience: '',
+  location: '',
+  linkedinUrl: '',
+  portfolioUrl: '',
+  githubUrl: '',
+  workExperience: '',
+  topSkills: '',
+  differentiation: '',
+  sideProjects: '',
+  targetCompensation: '',
+  targetRoles: [],
+  workStyle: [],
+  specialRequests: '',
+  openToRelocation: '',
 };
 
 // Detect if profile looks meaningfully filled (beyond the bare defaults)
@@ -94,26 +66,33 @@ function isProfileSaved(p: ProfileData | null): p is ProfileData {
 
 export default function ProfilePage() {
   const router = useRouter();
+  const supabase = useSupabase();
   const [viewMode, setViewMode] = useState<'summary' | 'edit'>('edit');
   const [step, setStep] = useState(1);
-  const [profile, setProfile] = useState<ProfileData>(defaultProfile);
+  const [profile, setProfile] = useState<ProfileData>(emptyProfile);
   const [hasExistingProfile, setHasExistingProfile] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [hasResumeReport, setHasResumeReport] = useState(false);
+  const [hasMarketReport, setHasMarketReport] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem('jobpilot_profile');
-    if (saved) {
+    (async () => {
       try {
-        const parsed = JSON.parse(saved);
-        const merged = { ...defaultProfile, ...parsed };
-        setProfile(merged);
-        if (isProfileSaved(merged)) {
-          setHasExistingProfile(true);
-          setViewMode('summary');
+        const saved = await getProfile(supabase);
+        if (saved) {
+          const merged = { ...emptyProfile, ...saved };
+          setProfile(merged);
+          if (isProfileSaved(merged)) {
+            setHasExistingProfile(true);
+            setViewMode('summary');
+          }
         }
       } catch {}
-    }
-  }, []);
+      // Load CTA state
+      setHasResumeReport(!!localStorage.getItem('jobpilot_resume_report'));
+      setHasMarketReport(!!localStorage.getItem('jobpilot_market_report'));
+    })();
+  }, [supabase]);
 
   const update = (field: keyof ProfileData, value: string | string[]) => {
     setProfile((p) => ({ ...p, [field]: value }));
@@ -138,21 +117,23 @@ export default function ProfilePage() {
   };
 
   const handleSave = () => {
-    localStorage.setItem('jobpilot_profile', JSON.stringify(profile));
+    saveProfile(supabase, profile);
     setHasExistingProfile(true);
     setViewMode('summary');
   };
 
   const handleFinish = () => {
-    localStorage.setItem('jobpilot_profile', JSON.stringify(profile));
+    saveProfile(supabase, profile);
     setHasExistingProfile(true);
     setViewMode('summary');
   };
 
-  const clearProfile = () => {
-    localStorage.removeItem('jobpilot_profile');
+  const clearProfile = async () => {
+    await clearAllData(supabase);
     setProfile(defaultProfile);
     setHasExistingProfile(false);
+    setHasResumeReport(false);
+    setHasMarketReport(false);
     setViewMode('edit');
     setStep(1);
     setShowClearConfirm(false);
@@ -308,8 +289,6 @@ export default function ProfilePage() {
             {/* Next Step CTA */}
             <div className="flex gap-3 pt-2">
               {(() => {
-                const hasResumeReport = !!localStorage.getItem('jobpilot_resume_report');
-                const hasMarketReport = !!localStorage.getItem('jobpilot_market_report');
                 if (!hasResumeReport) {
                   return (
                     <>

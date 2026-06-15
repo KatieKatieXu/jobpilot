@@ -1,7 +1,9 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import AppLayout from '@/components/AppLayout';
+import { useSupabase } from '@/app/hooks/useSupabase';
+import { getApplications, saveApplications } from '@/app/lib/db';
 
 interface Application {
   id: number;
@@ -21,15 +23,6 @@ const columns: { id: Column; label: string; icon: string }[] = [
   { id: 'rejected', label: 'Rejected', icon: '❌' },
 ];
 
-const seedApplications: Application[] = [
-  {
-    id: 1,
-    company: 'Anthropic',
-    role: 'Product Designer',
-    date: '2026-03-17',
-    status: 'applied',
-  },
-];
 
 // Custom dropdown component for status change
 function StatusDropdown({ 
@@ -90,43 +83,61 @@ function StatusDropdown({
 }
 
 export default function ApplicationsPage() {
-  const [apps, setApps] = useState<Application[]>(seedApplications);
+  const supabase = useSupabase();
+  const [apps, setApps] = useState<Application[]>([]);
 
   useEffect(() => {
-    const saved = localStorage.getItem('jobpilot_applications');
-    if (saved) {
-      try { setApps(JSON.parse(saved)); } catch {}
-    }
-  }, []);
+    let cancelled = false;
+    (async () => {
+      const loaded = await getApplications(supabase);
+      if (cancelled) return;
+      if (supabase) {
+        // Authenticated: use DB data (may be empty)
+        setApps(loaded);
+      } else {
+        // Anonymous: use localStorage data
+        setApps(loaded);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [supabase]);
 
-  const moveApp = (id: number, newStatus: Column) => {
-    const updated = apps.map((a) => (a.id === id ? { ...a, status: newStatus } : a));
-    setApps(updated);
-    localStorage.setItem('jobpilot_applications', JSON.stringify(updated));
+  const moveApp = useCallback((id: number, newStatus: Column) => {
+    setApps((prev) => {
+      const updated = prev.map((a) => (a.id === id ? { ...a, status: newStatus } : a));
+      saveApplications(supabase, updated);
 
-    // Sync applied badge on jobs board
-    const savedApplied = localStorage.getItem('jobpilot_applied');
-    let appliedIds: number[] = [];
-    try { appliedIds = savedApplied ? JSON.parse(savedApplied) : []; } catch {}
-    const appliedSet = new Set(appliedIds);
-    if (newStatus === 'rejected' || newStatus === 'saved') {
-      appliedSet.delete(id);
-    } else {
-      appliedSet.add(id);
-    }
-    localStorage.setItem('jobpilot_applied', JSON.stringify([...appliedSet]));
-  };
+      // Sync applied badge on jobs board (localStorage only — jobs page reads this)
+      if (!supabase) {
+        const savedApplied = localStorage.getItem('jobpilot_applied');
+        let appliedIds: number[] = [];
+        try { appliedIds = savedApplied ? JSON.parse(savedApplied) : []; } catch {}
+        const appliedSet = new Set(appliedIds);
+        if (newStatus === 'rejected' || newStatus === 'saved') {
+          appliedSet.delete(id);
+        } else {
+          appliedSet.add(id);
+        }
+        localStorage.setItem('jobpilot_applied', JSON.stringify([...appliedSet]));
+      }
+      return updated;
+    });
+  }, [supabase]);
 
-  const removeApp = (id: number) => {
-    const updated = apps.filter((a) => a.id !== id);
-    setApps(updated);
-    localStorage.setItem('jobpilot_applications', JSON.stringify(updated));
-    // Remove from applied set too
-    const savedApplied = localStorage.getItem('jobpilot_applied');
-    let appliedIds: number[] = [];
-    try { appliedIds = savedApplied ? JSON.parse(savedApplied) : []; } catch {}
-    localStorage.setItem('jobpilot_applied', JSON.stringify(appliedIds.filter((i) => i !== id)));
-  };
+  const removeApp = useCallback((id: number) => {
+    setApps((prev) => {
+      const updated = prev.filter((a) => a.id !== id);
+      saveApplications(supabase, updated);
+      // Remove from applied set too (localStorage only)
+      if (!supabase) {
+        const savedApplied = localStorage.getItem('jobpilot_applied');
+        let appliedIds: number[] = [];
+        try { appliedIds = savedApplied ? JSON.parse(savedApplied) : []; } catch {}
+        localStorage.setItem('jobpilot_applied', JSON.stringify(appliedIds.filter((i) => i !== id)));
+      }
+      return updated;
+    });
+  }, [supabase]);
 
   const getApps = (col: Column) => apps.filter((a) => a.status === col);
 

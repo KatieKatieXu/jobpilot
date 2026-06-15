@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import AppLayout from '@/components/AppLayout';
+import { useSupabase } from '@/app/hooks/useSupabase';
+import { getProfile, getApplications, getJobs, getResumeReport, getMarketReport } from '@/app/lib/db';
 
 interface Profile {
   fullName?: string;
@@ -66,11 +68,10 @@ function timeAgo(dateStr: string): string {
   return `${days}d ago`;
 }
 
-// Total number of curated jobs in the board
-const TOTAL_JOBS = 13;
-
 export default function DashboardPage() {
+  const supabase = useSupabase();
   const [profile, setProfile] = useState<Profile>({});
+  const [totalJobs, setTotalJobs] = useState(0);
   const [appliedCount, setAppliedCount] = useState(0);
   const [interviewCount, setInterviewCount] = useState(0);
   const [offerCount, setOfferCount] = useState(0);
@@ -80,116 +81,94 @@ export default function DashboardPage() {
   const [hasResume, setHasResume] = useState(false);
 
   useEffect(() => {
-    // Profile
-    const savedProfile = localStorage.getItem('jobpilot_profile');
-    let p: Profile = {};
-    if (savedProfile) {
-      try { p = JSON.parse(savedProfile); } catch {}
-    }
-    setProfile(p);
-    setProfileStrength(calcProfileStrength(p));
+    let cancelled = false;
+    (async () => {
+      // Profile
+      const p = (await getProfile(supabase)) as Profile ?? {};
+      if (cancelled) return;
+      setProfile(p);
+      setProfileStrength(calcProfileStrength(p));
 
-    // Applied jobs (Set)
-    const savedApplied = localStorage.getItem('jobpilot_applied');
-    let appliedIds: number[] = [];
-    if (savedApplied) {
-      try { appliedIds = JSON.parse(savedApplied); } catch {}
-    }
-    setAppliedCount(appliedIds.length);
+      // Jobs count
+      const jobs = await getJobs(supabase);
+      if (cancelled) return;
+      setTotalJobs(jobs.length);
 
-    // Applications board (for status breakdown)
-    const savedApps = localStorage.getItem('jobpilot_applications');
-    let apps: Application[] = [];
-    if (savedApps) {
-      try { apps = JSON.parse(savedApps); } catch {}
-    }
-    setInterviewCount(apps.filter((a) => a.status === 'interviewing').length);
-    setOfferCount(apps.filter((a) => a.status === 'offer').length);
+      // Applications
+      const apps = await getApplications(supabase);
+      if (cancelled) return;
+      setAppliedCount(apps.filter((a: Application) => a.status === 'applied').length);
+      setInterviewCount(apps.filter((a: Application) => a.status === 'interviewing').length);
+      setOfferCount(apps.filter((a: Application) => a.status === 'offer').length);
 
-    // Market & resume reports
-    setHasMarket(!!localStorage.getItem('jobpilot_market_report'));
-    setHasResume(!!localStorage.getItem('jobpilot_resume_report'));
+      // Market & resume reports
+      const resumeReport = await getResumeReport(supabase);
+      const marketReport = await getMarketReport(supabase);
+      if (cancelled) return;
+      setHasResume(!!resumeReport);
+      setHasMarket(!!marketReport);
 
-    // Build activity feed from real data
-    const items: ActivityItem[] = [];
+      // Build activity feed from real data
+      const items: ActivityItem[] = [];
 
-    // Applied jobs → activity entries
-    apps.forEach((app) => {
-      const ts = new Date(app.date).getTime();
-      items.push({
-        text: `Applied to ${app.role} at ${app.company}`,
-        time: timeAgo(app.date),
-        icon: '📤',
-        ts,
+      // Applied jobs → activity entries
+      apps.forEach((app: Application) => {
+        const dateStr = app.date || (app as Record<string, string>).appliedAt || new Date().toISOString();
+        const ts = new Date(dateStr).getTime();
+        items.push({
+          text: `Applied to ${app.role || (app as Record<string, string>).jobTitle} at ${app.company}`,
+          time: timeAgo(dateStr),
+          icon: '📤',
+          ts,
+        });
+        if (app.status === 'interviewing') {
+          items.push({
+            text: `Interview scheduled: ${app.role || (app as Record<string, string>).jobTitle} at ${app.company}`,
+            time: timeAgo(dateStr),
+            icon: '📞',
+            ts: ts + 1,
+          });
+        }
+        if (app.status === 'offer') {
+          items.push({
+            text: `Offer received: ${app.role || (app as Record<string, string>).jobTitle} at ${app.company} 🎉`,
+            time: timeAgo(dateStr),
+            icon: '🏆',
+            ts: ts + 2,
+          });
+        }
       });
-      if (app.status === 'interviewing') {
-        items.push({
-          text: `Interview scheduled: ${app.role} at ${app.company}`,
-          time: timeAgo(app.date),
-          icon: '📞',
-          ts: ts + 1,
-        });
-      }
-      if (app.status === 'offer') {
-        items.push({
-          text: `Offer received: ${app.role} at ${app.company} 🎉`,
-          time: timeAgo(app.date),
-          icon: '🏆',
-          ts: ts + 2,
-        });
-      }
-    });
 
-    // Resume report
-    const resumeRaw = localStorage.getItem('jobpilot_resume_report');
-    if (resumeRaw) {
-      try {
-        const r = JSON.parse(resumeRaw);
-        const ts = new Date(r.savedAt).getTime();
+      // Resume report
+      if (resumeReport) {
+        const ts = new Date(resumeReport.savedAt).getTime();
         items.push({
-          text: `Resume revised — ${r.appliedCount} AI improvements applied`,
-          time: timeAgo(r.savedAt),
+          text: `Resume revised — ${resumeReport.appliedCount} AI improvements applied`,
+          time: timeAgo(resumeReport.savedAt),
           icon: '📄',
           ts,
         });
-      } catch {}
-    }
+      }
 
-    // Market report
-    const marketRaw = localStorage.getItem('jobpilot_market_report');
-    if (marketRaw) {
-      try {
-        const m = JSON.parse(marketRaw);
-        const ts = new Date(m.savedAt).getTime();
-        const approved = (m.actions || []).filter((a: { status: string }) => a.status === 'approved').length;
+      // Profile creation
+      if (p.fullName) {
         items.push({
-          text: `Market analysis complete — ${approved} recommendations approved`,
-          time: timeAgo(m.savedAt),
-          icon: '📊',
-          ts,
+          text: `Profile saved for ${p.fullName}`,
+          time: '',
+          icon: '✅',
+          ts: 0,
         });
-      } catch {}
-    }
+      }
 
-    // Profile creation
-    if (savedProfile) {
-      items.push({
-        text: p.fullName ? `Profile saved for ${p.fullName}` : 'Profile created',
-        time: '',
-        icon: '✅',
-        ts: 0,
-      });
-    }
-
-    // Sort newest first, show top 6
-    items.sort((a, b) => b.ts - a.ts);
-    setActivity(items.slice(0, 6));
-  }, []);
-
-  const jobsAvailable = TOTAL_JOBS - appliedCount;
+      // Sort newest first, show top 6
+      items.sort((a, b) => b.ts - a.ts);
+      setActivity(items.slice(0, 6));
+    })();
+    return () => { cancelled = true; };
+  }, [supabase]);
 
   const statCards = [
-    { label: 'Jobs Available', value: String(jobsAvailable), icon: '💼', color: 'text-violet-400', href: '/jobs' },
+    { label: 'Jobs Saved', value: String(totalJobs), icon: '💼', color: 'text-violet-400', href: '/jobs' },
     { label: 'Applications', value: String(appliedCount), icon: '📤', color: 'text-blue-400', href: '/applications' },
     { label: 'Interviews', value: String(interviewCount), icon: '📞', color: 'text-green-400', href: '/applications' },
     { label: 'Profile', value: `${profileStrength}%`, icon: '⚡', color: profileStrength >= 80 ? 'text-green-400' : profileStrength >= 50 ? 'text-yellow-400' : 'text-red-400', href: '/profile' },
@@ -386,7 +365,7 @@ export default function DashboardPage() {
                 <span className="text-xl">🔍</span>
                 <div>
                   <p className="text-sm font-medium text-slate-200">Browse Jobs</p>
-                  <p className="text-xs text-slate-500">{TOTAL_JOBS} curated matches</p>
+                  <p className="text-xs text-slate-500">{totalJobs > 0 ? `${totalJobs} saved jobs` : 'Add jobs to track'}</p>
                 </div>
               </Link>
               <Link href="/resume" className="flex items-center gap-3 p-3 bg-slate-800 hover:bg-slate-700 rounded-xl transition">

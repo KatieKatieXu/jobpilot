@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useAuth } from '@/app/components/AuthProvider';
 
 const inputItems = [
   { href: '/profile', label: 'Profile', icon: '👤' },
@@ -21,6 +22,7 @@ const mainItems = [
 export default function Sidebar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { user, signOut } = useAuth();
 
   const navContent = (
     <>
@@ -95,7 +97,24 @@ export default function Sidebar() {
       </nav>
 
       <div className="p-4 border-t border-slate-800">
-        <p className="text-xs text-slate-500 text-center">Powered by Cleo 🦾</p>
+        {user ? (
+          <div className="text-center space-y-2">
+            <p className="text-xs text-slate-400 truncate">{user.email}</p>
+            <button
+              onClick={() => signOut()}
+              className="text-xs text-slate-500 hover:text-red-400 transition"
+            >
+              Sign Out
+            </button>
+          </div>
+        ) : (
+          <Link
+            href="/auth"
+            className="block text-xs text-slate-500 hover:text-violet-400 text-center transition"
+          >
+            Sign In
+          </Link>
+        )}
       </div>
     </>
   );

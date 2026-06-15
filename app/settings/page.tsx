@@ -2,22 +2,40 @@
 
 import { useState, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
+import { useSupabase } from '@/app/hooks/useSupabase';
+import { useAuth } from '@/app/components/AuthProvider';
+import { clearAllData, getProfile } from '@/app/lib/db';
 
 export default function SettingsPage() {
+  const supabase = useSupabase();
+  const { user } = useAuth();
   const [cleared, setCleared] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
   const [currentTier, setCurrentTier] = useState<'free' | 'pro' | 'premium'>('free');
   const [canceled, setCanceled] = useState(false);
 
   useEffect(() => {
-    // Read tier from cookie
-    const match = document.cookie.match(/jobpilot_tier=(free|pro|premium)/);
-    if (match) setCurrentTier(match[1] as 'free' | 'pro' | 'premium');
+    // Read tier from profile (Supabase or localStorage)
+    (async () => {
+      try {
+        const profile = await getProfile(supabase);
+        if (profile?.tier) {
+          setCurrentTier(profile.tier as 'free' | 'pro' | 'premium');
+        } else {
+          // Fallback to cookie
+          const match = document.cookie.match(/jobpilot_tier=(free|pro|premium)/);
+          if (match) setCurrentTier(match[1] as 'free' | 'pro' | 'premium');
+        }
+      } catch {
+        const match = document.cookie.match(/jobpilot_tier=(free|pro|premium)/);
+        if (match) setCurrentTier(match[1] as 'free' | 'pro' | 'premium');
+      }
+    })();
 
     // Check URL for canceled param (avoid useSearchParams to skip Suspense requirement)
     const params = new URLSearchParams(window.location.search);
     if (params.get('canceled')) setCanceled(true);
-  }, []);
+  }, [supabase]);
 
   const handleUpgrade = async (tier: 'pro' | 'premium') => {
     setUpgrading(true);
@@ -57,12 +75,9 @@ export default function SettingsPage() {
     URL.revokeObjectURL(url);
   };
 
-  const clearData = () => {
+  const clearData = async () => {
     if (window.confirm('Are you sure? This will delete all your profile data and applications.')) {
-      localStorage.removeItem('jobpilot_profile');
-      localStorage.removeItem('jobpilot_applications');
-      localStorage.removeItem('jobpilot_jobs');
-      localStorage.removeItem('jobpilot_analysis');
+      await clearAllData(supabase);
       setCleared(true);
       setTimeout(() => setCleared(false), 3000);
     }
@@ -155,6 +170,32 @@ export default function SettingsPage() {
             <p className="text-xs text-slate-600">
               Free plan: 3 AI actions/day. Upgrade anytime to unlock more.
             </p>
+          )}
+        </div>
+
+        {/* Account */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+          <h2 className="text-base font-semibold text-white">Account</h2>
+          {user ? (
+            <div className="flex items-center justify-between p-4 bg-slate-800 rounded-xl">
+              <div>
+                <p className="text-sm font-medium text-slate-200">{user.email}</p>
+                <p className="text-xs text-slate-500">Signed in via Google</p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between p-4 bg-slate-800 rounded-xl">
+              <div>
+                <p className="text-sm font-medium text-slate-200">Not signed in</p>
+                <p className="text-xs text-slate-500">Sign in to sync data across devices</p>
+              </div>
+              <a
+                href="/auth"
+                className="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition"
+              >
+                Sign In
+              </a>
+            </div>
           )}
         </div>
 

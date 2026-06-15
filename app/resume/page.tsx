@@ -3,6 +3,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import type { Suggestion } from '../api/analyze-resume/route';
+import { useSupabase } from '@/app/hooks/useSupabase';
+import { getResumeReport, saveResumeReport, saveProfile, clearDerivedData } from '@/app/lib/db';
 
 type Step = 'saved' | 'upload' | 'review' | 'export';
 type Category = 'all' | 'impact' | 'ats' | 'clarity' | 'gaps' | 'formatting';
@@ -40,6 +42,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export default function ResumePage() {
+  const supabase = useSupabase();
   const [step, setStep] = useState<Step>('upload');
   const [savedReport, setSavedReport] = useState<SavedReport | null>(null);
   const [resumeText, setResumeText] = useState('');
@@ -63,24 +66,25 @@ export default function ResumePage() {
 
   // Load saved report on mount
   useEffect(() => {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
+    (async () => {
       try {
-        const report: SavedReport = JSON.parse(raw);
-        setSavedReport(report);
-        setStep('saved');
+        const report = await getResumeReport(supabase);
+        if (report) {
+          setSavedReport(report as SavedReport);
+          setStep('saved');
+        }
       } catch {}
-    }
-  }, []);
+    })();
+  }, [supabase]);
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   const persistReport = (report: SavedReport) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(report));
+    saveResumeReport(supabase, report);
     setSavedReport(report);
   };
 
   const clearReport = () => {
-    localStorage.removeItem(STORAGE_KEY);
+    clearDerivedData(supabase);
     setSavedReport(null);
     setStep('upload');
     setResumeText('');
@@ -114,12 +118,32 @@ export default function ResumePage() {
       if (!res.ok || data.error) throw new Error(data.error || 'Parse failed');
       setResumeText(data.text);
       setPastedText(data.text);
+
+      // New resume detected → clear ALL stale cached data first
+      await clearDerivedData(supabase);
+      setSavedReport(null);
+
+      // Then populate profile from extracted fields (fresh start)
+      if (data.extracted) {
+        try {
+          const profile: Record<string, string> = {};
+          if (data.extracted.name) profile.fullName = data.extracted.name;
+          if (data.extracted.currentTitle) profile.currentTitle = data.extracted.currentTitle;
+          if (data.extracted.yearsExperience) profile.yearsExperience = data.extracted.yearsExperience;
+          if (data.extracted.location) profile.location = data.extracted.location;
+          if (data.extracted.linkedin) profile.linkedinUrl = data.extracted.linkedin;
+          if (data.extracted.github) profile.githubUrl = data.extracted.github;
+          if (data.extracted.website) profile.portfolioUrl = data.extracted.website;
+          profile.workExperience = data.text;
+          await saveProfile(supabase, profile);
+        } catch {}
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Upload failed');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [supabase]);
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -198,6 +222,9 @@ export default function ResumePage() {
         savedAt: new Date().toISOString(),
       });
 
+      // Auto-sync: update profile and clear stale stories/market data
+      autoSyncAfterRefinement(data.revisedText);
+
       setStep('export');
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Export failed');
@@ -223,16 +250,117 @@ export default function ResumePage() {
     URL.revokeObjectURL(url);
   };
 
-  const syncToProfile = (text: string) => {
+  const syncToProfile = async (text: string) => {
     try {
+      const extracted = extractFieldsFromText(text);
       const saved = localStorage.getItem('jobpilot_profile');
       const profile = saved ? JSON.parse(saved) : {};
       profile.workExperience = text;
-      localStorage.setItem('jobpilot_profile', JSON.stringify(profile));
+      if (extracted.fullName) profile.fullName = extracted.fullName;
+      if (extracted.currentTitle) profile.currentTitle = extracted.currentTitle;
+      if (extracted.yearsExperience) profile.yearsExperience = extracted.yearsExperience;
+      if (extracted.location) profile.location = extracted.location;
+      if (extracted.linkedinUrl) profile.linkedinUrl = extracted.linkedinUrl;
+      if (extracted.githubUrl) profile.githubUrl = extracted.githubUrl;
+      if (extracted.portfolioUrl) profile.portfolioUrl = extracted.portfolioUrl;
+      await saveProfile(supabase, profile);
       setSynced(true);
       setTimeout(() => setSynced(false), 3000);
     } catch {
       setError('Failed to sync to profile.');
+    }
+  };
+
+  /** Extract profile fields from resume text (client-side mirror of server extractFields) */
+  const extractFieldsFromText = (text: string) => {
+    const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+
+    const emailMatch = text.match(/[\w.+-]+@[\w-]+\.[a-z]{2,}/i);
+    const linkedinMatch = text.match(/linkedin\.com\/in\/[\w-]+/i);
+    const githubMatch = text.match(/github\.com\/[\w-]+/i);
+    const websiteMatch = text.match(/https?:\/\/(?!linkedin|github)[\w.-]+\.[a-z]{2,}[\w/.-]*/i);
+
+    const nameLine = lines.find(
+      (l) => /^[A-Z][a-z]+ [A-Z][a-z]+/.test(l) && l.split(' ').length <= 4
+    );
+
+    // Title: line after name, or common title patterns
+    const nameIdx = nameLine ? lines.indexOf(nameLine) : -1;
+    let currentTitle = '';
+    if (nameIdx >= 0 && nameIdx + 1 < lines.length) {
+      const nextLine = lines[nameIdx + 1];
+      if (nextLine && !/[@()\d{3}]/.test(nextLine) && !nextLine.includes('http') && nextLine.length < 80) {
+        currentTitle = nextLine;
+      }
+    }
+    if (!currentTitle) {
+      const titlePatterns = /\b(senior|staff|principal|lead|director|vp|manager|head of|chief)\b.*\b(designer|engineer|developer|product|ux|ui|architect|analyst|scientist|consultant)\b/i;
+      const titleLine = lines.find((l) => titlePatterns.test(l) && l.length < 80);
+      if (titleLine) currentTitle = titleLine;
+    }
+
+    // Years of experience
+    let yearsExperience = '';
+    const yearsMatch = text.match(/(\d{1,2})\+?\s*years?\s*(of\s*)?(professional\s*)?(experience|in\b)/i);
+    if (yearsMatch) {
+      yearsExperience = yearsMatch[1];
+    } else {
+      const expIdx = lines.findIndex((l) => /^(work\s)?experience/i.test(l));
+      if (expIdx !== -1) {
+        const expSection = lines.slice(expIdx, expIdx + 60).join(' ');
+        const yearMatches = expSection.match(/\b(19|20)\d{2}\b/g);
+        if (yearMatches && yearMatches.length > 0) {
+          const earliest = Math.min(...yearMatches.map(Number));
+          const years = new Date().getFullYear() - earliest;
+          if (years > 0 && years < 50) yearsExperience = String(years);
+        }
+      }
+    }
+
+    // Location
+    let location = '';
+    const locationMatch = text.match(/\b([A-Z][a-z]+(?:\s[A-Z][a-z]+)?),\s*([A-Z]{2})\b/);
+    if (locationMatch) location = locationMatch[0];
+
+    return {
+      fullName: nameLine || '',
+      currentTitle,
+      yearsExperience,
+      location,
+      linkedinUrl: linkedinMatch ? `https://www.${linkedinMatch[0]}` : '',
+      githubUrl: githubMatch ? `https://www.${githubMatch[0]}` : '',
+      portfolioUrl: websiteMatch?.[0] || '',
+      email: emailMatch?.[0] || '',
+    };
+  };
+
+  /** Auto-sync: update ALL profile fields + regenerate stories from revised resume */
+  const autoSyncAfterRefinement = async (revisedText: string) => {
+    try {
+      // 1. Extract all fields from revised text
+      const extracted = extractFieldsFromText(revisedText);
+
+      // 2. Merge into existing profile (only overwrite non-empty extracted values)
+      const saved = localStorage.getItem('jobpilot_profile');
+      const profile = saved ? JSON.parse(saved) : {};
+      profile.workExperience = revisedText;
+      if (extracted.fullName) profile.fullName = extracted.fullName;
+      if (extracted.currentTitle) profile.currentTitle = extracted.currentTitle;
+      if (extracted.yearsExperience) profile.yearsExperience = extracted.yearsExperience;
+      if (extracted.location) profile.location = extracted.location;
+      if (extracted.linkedinUrl) profile.linkedinUrl = extracted.linkedinUrl;
+      if (extracted.githubUrl) profile.githubUrl = extracted.githubUrl;
+      if (extracted.portfolioUrl) profile.portfolioUrl = extracted.portfolioUrl;
+      await saveProfile(supabase, profile);
+
+      // 3. Clear old stories and market analysis so they regenerate from new resume
+      localStorage.removeItem('jobpilot_experience_bank');
+      localStorage.removeItem('jobpilot_market_report');
+
+      setSynced(true);
+      setTimeout(() => setSynced(false), 3000);
+    } catch {
+      setError('Failed to auto-sync.');
     }
   };
 

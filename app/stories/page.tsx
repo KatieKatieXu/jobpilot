@@ -1,7 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import AppLayout from '@/components/AppLayout';
+import { useSupabase } from '@/app/hooks/useSupabase';
+import { getExperienceEntries, saveExperienceEntries } from '@/app/lib/db';
 
 const STORAGE_KEY = 'jobpilot_experience_bank';
 const MARKET_KEY = 'jobpilot_market_report';
@@ -101,11 +103,18 @@ function loadEntries(): StoryEntry[] {
         source: e.source || 'user',
       }));
     }
-    // First time — seed
+    // No saved entries — check if user has a profile (returning user who cleared data)
+    // vs first-time visitor who should get seed entries
+    const hasProfile = !!localStorage.getItem('jobpilot_profile');
+    if (hasProfile) {
+      // User cleared stories (e.g., after resume refinement) — start fresh
+      return [];
+    }
+    // First-time visitor — seed with example stories
     localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_ENTRIES));
     return SEED_ENTRIES;
   } catch {
-    return SEED_ENTRIES;
+    return [];
   }
 }
 
@@ -118,6 +127,7 @@ function generateId() {
 }
 
 export default function StoriesPage() {
+  const supabase = useSupabase();
   const [entries, setEntries] = useState<StoryEntry[]>([]);
   const [aiQuestions, setAiQuestions] = useState<MarketQuestion[]>([]);
   const [aiAnswers, setAiAnswers] = useState<Record<string, string>>({});
@@ -133,9 +143,34 @@ export default function StoriesPage() {
   const [formTags, setFormTags] = useState<string[]>([]);
   const [formTagInput, setFormTagInput] = useState('');
 
+  const persistEntries = useCallback((updated: StoryEntry[]) => {
+    saveExperienceEntries(supabase, updated);
+  }, [supabase]);
+
   useEffect(() => {
-    setEntries(loadEntries());
-    
+    (async () => {
+      try {
+        const loaded = await getExperienceEntries(supabase);
+        if (loaded.length > 0) {
+          // Migrate old entries without source field
+          const migrated = loaded.map((e) => ({
+            ...e,
+            source: e.source || 'user',
+            createdAt: (e as StoryEntry).createdAt || new Date().toISOString(),
+          })) as StoryEntry[];
+          setEntries(migrated);
+        } else if (supabase) {
+          // Authenticated but no entries in DB — start fresh
+          setEntries([]);
+        } else {
+          // Anonymous — use localStorage seed logic
+          setEntries(loadEntries());
+        }
+      } catch {
+        setEntries(loadEntries());
+      }
+    })();
+
     // Load AI questions from market report
     const marketRaw = localStorage.getItem(MARKET_KEY);
     if (marketRaw) {
@@ -149,7 +184,7 @@ export default function StoriesPage() {
         }
       } catch {}
     }
-  }, []);
+  }, [supabase]);
 
   const openAddForm = () => {
     setFormQuestion('');
@@ -197,14 +232,14 @@ export default function StoriesPage() {
           : e
       );
     }
-    saveEntries(updated);
+    persistEntries(updated);
     setEntries(updated);
     cancelForm();
   };
 
   const deleteEntry = (id: string) => {
     const updated = entries.filter((e) => e.id !== id);
-    saveEntries(updated);
+    persistEntries(updated);
     setEntries(updated);
     setDeleteConfirmId(null);
     if (expandedId === id) setExpandedId(null);
