@@ -39,15 +39,15 @@ function buildUserPrompt(
 ): string {
   const profileSection = `
 APPLICANT PROFILE:
-- Name: ${profile.fullName || 'Katie Xu'}
-- Current Title: ${profile.currentTitle || 'VP & Design Lead'}
-- Years of Experience: ${profile.yearsExperience || '7'}
-- Location: ${profile.location || 'New York, NY'}
-- Top Skills: ${profile.topSkills || 'AI-native product design, Design systems, User research'}
+- Name: ${profile.fullName || 'Not provided'}
+- Current Title: ${profile.currentTitle || 'Not provided'}
+- Years of Experience: ${profile.yearsExperience || 'Not provided'}
+- Location: ${profile.location || 'Not provided'}
+- Top Skills: ${profile.topSkills || 'Not provided'}
 - What makes them different: ${profile.differentiation || ''}
 - Side projects / accomplishments: ${profile.sideProjects || ''}
 - Work Experience: ${profile.workExperience || ''}
-- Target Compensation: ${profile.targetCompensation || '$190K+ base'}
+- Target Compensation: ${profile.targetCompensation || 'Not provided'}
 - LinkedIn: ${profile.linkedinUrl || ''}
 - Portfolio: ${profile.portfolioUrl || ''}
 - GitHub: ${profile.githubUrl || ''}

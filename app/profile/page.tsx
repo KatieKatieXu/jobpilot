@@ -422,21 +422,21 @@ export default function ProfilePage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className={labelClass}>Full Name</label>
-                  <input className={inputClass} placeholder="Katie Xu" value={profile.fullName} onChange={(e) => update('fullName', e.target.value)} />
+                  <input className={inputClass} placeholder="Your full name" value={profile.fullName} onChange={(e) => update('fullName', e.target.value)} />
                 </div>
                 <div>
                   <label className={labelClass}>Current Title</label>
-                  <input className={inputClass} placeholder="Senior UX Designer" value={profile.currentTitle} onChange={(e) => update('currentTitle', e.target.value)} />
+                  <input className={inputClass} placeholder="e.g. Product Designer" value={profile.currentTitle} onChange={(e) => update('currentTitle', e.target.value)} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className={labelClass}>Years of Experience</label>
-                  <input className={inputClass} placeholder="7" value={profile.yearsExperience} onChange={(e) => update('yearsExperience', e.target.value)} />
+                  <input className={inputClass} placeholder="e.g. 5" value={profile.yearsExperience} onChange={(e) => update('yearsExperience', e.target.value)} />
                 </div>
                 <div>
                   <label className={labelClass}>Location</label>
-                  <input className={inputClass} placeholder="New York, NY" value={profile.location} onChange={(e) => update('location', e.target.value)} />
+                  <input className={inputClass} placeholder="e.g. San Francisco, CA" value={profile.location} onChange={(e) => update('location', e.target.value)} />
                 </div>
               </div>
               <div>
