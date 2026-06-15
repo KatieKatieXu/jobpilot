@@ -123,7 +123,7 @@ export default function DashboardPage() {
         });
         if (app.status === 'interviewing') {
           items.push({
-            text: `Interview scheduled: ${app.role || (app as Record<string, string>).jobTitle} at ${app.company}`,
+            text: `Interview scheduled: ${app.role || (app as unknown as Record<string, string>).jobTitle} at ${app.company}`,
             time: timeAgo(dateStr),
             icon: '📞',
             ts: ts + 1,
@@ -131,7 +131,7 @@ export default function DashboardPage() {
         }
         if (app.status === 'offer') {
           items.push({
-            text: `Offer received: ${app.role || (app as Record<string, string>).jobTitle} at ${app.company} 🎉`,
+            text: `Offer received: ${app.role || (app as unknown as Record<string, string>).jobTitle} at ${app.company} 🎉`,
             time: timeAgo(dateStr),
             icon: '🏆',
             ts: ts + 2,
