@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { AuthProvider } from '@/app/components/AuthProvider';
+import { ThemeProvider } from '@/app/components/ThemeProvider';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -14,10 +15,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="bg-[#0f1117] text-slate-100 antialiased">
-        <AuthProvider>
-          {children}
-        </AuthProvider>
+      <body className="antialiased">
+        <ThemeProvider>
+          <AuthProvider>
+            {children}
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

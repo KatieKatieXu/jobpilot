@@ -10,6 +10,7 @@ type Step = 'saved' | 'upload' | 'review' | 'export';
 type Category = 'all' | 'impact' | 'ats' | 'clarity' | 'gaps' | 'formatting';
 
 const STORAGE_KEY = 'jobpilot_resume_report';
+const DRAFT_KEY = 'jobpilot_resume_draft';
 
 interface SavedReport {
   revisedText: string;
@@ -64,7 +65,7 @@ export default function ResumePage() {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load saved report on mount
+  // Load saved report or draft on mount
   useEffect(() => {
     (async () => {
       try {
@@ -72,6 +73,17 @@ export default function ResumePage() {
         if (report) {
           setSavedReport(report as SavedReport);
           setStep('saved');
+          return;
+        }
+        // No finished report — restore upload draft if one exists
+        const draftRaw = localStorage.getItem(DRAFT_KEY);
+        if (draftRaw) {
+          const draft = JSON.parse(draftRaw) as { text: string; fileName: string };
+          if (draft.text) {
+            setResumeText(draft.text);
+            setPastedText(draft.text);
+            setFileName(draft.fileName || '');
+          }
         }
       } catch {}
     })();
@@ -81,10 +93,13 @@ export default function ResumePage() {
   const persistReport = (report: SavedReport) => {
     saveResumeReport(supabase, report);
     setSavedReport(report);
+    // Draft is no longer needed once a full report is saved
+    localStorage.removeItem(DRAFT_KEY);
   };
 
   const clearReport = () => {
     clearDerivedData(supabase);
+    localStorage.removeItem(DRAFT_KEY);
     setSavedReport(null);
     setStep('upload');
     setResumeText('');
@@ -118,6 +133,9 @@ export default function ResumePage() {
       if (!res.ok || data.error) throw new Error(data.error || 'Parse failed');
       setResumeText(data.text);
       setPastedText(data.text);
+
+      // Persist draft so it survives page navigation
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ text: data.text, fileName: file.name }));
 
       // New resume detected → clear ALL stale cached data first
       await clearDerivedData(supabase);
@@ -585,7 +603,11 @@ export default function ResumePage() {
             {/* Paste textarea */}
             <textarea
               value={pastedText}
-              onChange={(e) => setPastedText(e.target.value)}
+              onChange={(e) => {
+                setPastedText(e.target.value);
+                // Persist draft so edits survive page navigation
+                localStorage.setItem(DRAFT_KEY, JSON.stringify({ text: e.target.value, fileName }));
+              }}
               placeholder="Paste your resume text here…"
               rows={12}
               className="w-full bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-slate-300 text-sm placeholder-slate-600 focus:outline-none focus:border-violet-500 resize-none font-mono"
