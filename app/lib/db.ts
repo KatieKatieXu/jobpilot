@@ -377,6 +377,8 @@ export async function clearDerivedData(supabase: SupabaseClient | null): Promise
   }
   // Always clear localStorage cache
   localStorage.removeItem('jobpilot_resume_report');
+  localStorage.removeItem('jobpilot_resume_analysis');
+  localStorage.removeItem('jobpilot_resume_draft');
   localStorage.removeItem('jobpilot_experience_bank');
   localStorage.removeItem('jobpilot_market_report');
   localStorage.removeItem('jobpilot_analysis');

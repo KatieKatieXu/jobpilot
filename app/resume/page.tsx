@@ -11,6 +11,14 @@ type Category = 'all' | 'impact' | 'ats' | 'clarity' | 'gaps' | 'formatting';
 
 const STORAGE_KEY = 'jobpilot_resume_report';
 const DRAFT_KEY = 'jobpilot_resume_draft';
+const ANALYSIS_KEY = 'jobpilot_resume_analysis';
+
+interface AnalysisCache {
+  resumeText: string;
+  fileName: string;
+  suggestions: Suggestion[];
+  decisions: Record<string, 'approved' | 'skipped' | null>;
+}
 
 interface SavedReport {
   revisedText: string;
@@ -65,17 +73,34 @@ export default function ResumePage() {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load saved report or draft on mount
+  // Load saved state on mount: report > analysis cache > draft > empty
   useEffect(() => {
     (async () => {
       try {
+        // 1. Finished report — show export view
         const report = await getResumeReport(supabase);
         if (report) {
           setSavedReport(report as SavedReport);
           setStep('saved');
           return;
         }
-        // No finished report — restore upload draft if one exists
+
+        // 2. In-progress analysis — restore review step
+        const analysisRaw = localStorage.getItem(ANALYSIS_KEY);
+        if (analysisRaw) {
+          const cache = JSON.parse(analysisRaw) as AnalysisCache;
+          if (cache.suggestions?.length > 0) {
+            setResumeText(cache.resumeText);
+            setPastedText(cache.resumeText);
+            setFileName(cache.fileName || '');
+            setSuggestions(cache.suggestions);
+            setDecisions(cache.decisions || {});
+            setStep('review');
+            return;
+          }
+        }
+
+        // 3. Upload draft — restore text in upload step
         const draftRaw = localStorage.getItem(DRAFT_KEY);
         if (draftRaw) {
           const draft = JSON.parse(draftRaw) as { text: string; fileName: string };
@@ -93,13 +118,15 @@ export default function ResumePage() {
   const persistReport = (report: SavedReport) => {
     saveResumeReport(supabase, report);
     setSavedReport(report);
-    // Draft is no longer needed once a full report is saved
+    // Draft and analysis cache are no longer needed once a full report is saved
     localStorage.removeItem(DRAFT_KEY);
+    localStorage.removeItem(ANALYSIS_KEY);
   };
 
   const clearReport = () => {
     clearDerivedData(supabase);
     localStorage.removeItem(DRAFT_KEY);
+    localStorage.removeItem(ANALYSIS_KEY);
     setSavedReport(null);
     setStep('upload');
     setResumeText('');
@@ -186,10 +213,19 @@ export default function ResumePage() {
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Analysis failed');
+      const initialDecisions = Object.fromEntries(data.suggestions.map((s: Suggestion) => [s.id, null]));
       setSuggestions(data.suggestions);
-      setDecisions(Object.fromEntries(data.suggestions.map((s: Suggestion) => [s.id, null])));
+      setDecisions(initialDecisions);
       setResumeText(text);
       setStep('review');
+
+      // Cache analysis so it survives page navigation
+      localStorage.setItem(ANALYSIS_KEY, JSON.stringify({
+        resumeText: text,
+        fileName,
+        suggestions: data.suggestions,
+        decisions: initialDecisions,
+      } as AnalysisCache));
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Analysis failed');
     } finally {
@@ -198,8 +234,24 @@ export default function ResumePage() {
   };
 
   // ── Step 2: review ───────────────────────────────────────────────────────
+  // Helper to persist decisions to analysis cache
+  const persistDecisions = (nextDecisions: Record<string, 'approved' | 'skipped' | null>) => {
+    try {
+      const raw = localStorage.getItem(ANALYSIS_KEY);
+      if (raw) {
+        const cache = JSON.parse(raw) as AnalysisCache;
+        cache.decisions = nextDecisions;
+        localStorage.setItem(ANALYSIS_KEY, JSON.stringify(cache));
+      }
+    } catch {}
+  };
+
   const decide = (id: string, decision: 'approved' | 'skipped') => {
-    setDecisions((prev) => ({ ...prev, [id]: prev[id] === decision ? null : decision }));
+    setDecisions((prev) => {
+      const next = { ...prev, [id]: prev[id] === decision ? null : decision };
+      persistDecisions(next);
+      return next;
+    });
   };
 
   const approveAll = () => {
@@ -207,6 +259,7 @@ export default function ResumePage() {
     setDecisions((prev) => {
       const next = { ...prev };
       filtered.forEach((s) => { next[s.id] = 'approved'; });
+      persistDecisions(next);
       return next;
     });
   };
@@ -731,11 +784,21 @@ export default function ResumePage() {
                           value={(s as Suggestion & { _edited?: string })._edited ?? s.revised}
                           onChange={(e) => {
                             const val = e.target.value;
-                            setSuggestions((prev) =>
-                              prev.map((item) =>
+                            setSuggestions((prev) => {
+                              const next = prev.map((item) =>
                                 item.id === s.id ? { ...item, revised: val } : item
-                              )
-                            );
+                              );
+                              // Persist edited text to analysis cache
+                              try {
+                                const raw = localStorage.getItem(ANALYSIS_KEY);
+                                if (raw) {
+                                  const cache = JSON.parse(raw) as AnalysisCache;
+                                  cache.suggestions = next;
+                                  localStorage.setItem(ANALYSIS_KEY, JSON.stringify(cache));
+                                }
+                              } catch {}
+                              return next;
+                            });
                           }}
                         />
                       </div>
@@ -758,10 +821,10 @@ export default function ResumePage() {
             {/* CTA */}
             <div className="flex items-center gap-4 pt-2 border-t border-slate-800">
               <button
-                onClick={() => setStep('upload')}
-                className="px-4 py-3 text-slate-400 hover:text-white text-sm font-medium transition-colors"
+                onClick={clearReport}
+                className="px-4 py-3 text-slate-400 hover:text-red-400 text-sm font-medium transition-colors"
               >
-                ← Back
+                🗑 Start Over
               </button>
               <button
                 onClick={applyChanges}
