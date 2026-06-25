@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useSupabase } from '@/app/hooks/useSupabase';
-import { getApplications, saveApplications } from '@/app/lib/db';
+import { getApplications, insertApplication, deleteApplication, updateApplication } from '@/app/lib/db';
 
 interface Application {
   id: string | number;
@@ -163,21 +163,11 @@ export default function ApplicationsPage() {
     return () => { cancelled = true; };
   }, [supabase]);
 
-  // Helper to map apps to the shape saveApplications expects
-  const toDbShape = (list: Application[]) =>
-    list.map((a) => ({
-      id: a.id,
-      jobTitle: a.role,
-      company: a.company,
-      status: a.status,
-      appliedAt: a.date ? `${a.date}T00:00:00.000Z` : new Date().toISOString(),
-      notes: a.notes ?? '',
-    }));
-
   const moveApp = useCallback((id: string | number, newStatus: Column) => {
     setApps((prev) => {
       const updated = prev.map((a) => (a.id === id ? { ...a, status: newStatus } : a));
-      saveApplications(supabase, toDbShape(updated));
+      // Use single-row update instead of bulk delete/insert
+      updateApplication(supabase, String(id), { status: newStatus });
 
       // Sync applied badge on jobs board (localStorage only — jobs page reads this)
       if (!supabase) {
@@ -199,7 +189,8 @@ export default function ApplicationsPage() {
   const removeApp = useCallback((id: string | number) => {
     setApps((prev) => {
       const updated = prev.filter((a) => a.id !== id);
-      saveApplications(supabase, toDbShape(updated));
+      // Use single-row delete instead of bulk delete/insert
+      deleteApplication(supabase, String(id));
       // Remove from applied set too (localStorage only)
       if (!supabase) {
         const savedApplied = localStorage.getItem('jobpilot_applied');
@@ -223,21 +214,23 @@ export default function ApplicationsPage() {
         status: addForm.status,
         notes: addForm.notes.trim(),
       };
-      const updated = [newApp, ...apps];
-      setApps(updated);
 
-      // Persist — map to the shape saveApplications expects
-      await saveApplications(
-        supabase,
-        updated.map((a) => ({
-          id: a.id,
-          jobTitle: a.role,
-          company: a.company,
-          status: a.status,
-          appliedAt: a.date ? `${a.date}T00:00:00.000Z` : new Date().toISOString(),
-          notes: a.notes ?? '',
-        }))
-      );
+      // Persist single row — much safer than delete-all/insert-all
+      const dbRow = {
+        id: newApp.id,
+        jobTitle: newApp.role,
+        company: newApp.company,
+        status: newApp.status,
+        appliedAt: newApp.date ? `${newApp.date}T00:00:00.000Z` : new Date().toISOString(),
+        notes: newApp.notes ?? '',
+      };
+      const success = await insertApplication(supabase, dbRow);
+      if (!success) {
+        console.error('[Jobpilot] Failed to save application — check browser console for details');
+      }
+
+      // Update UI after successful save
+      setApps((prev) => [newApp, ...prev]);
 
       // Reset form + clear draft
       clearDraft();
@@ -246,7 +239,7 @@ export default function ApplicationsPage() {
     } finally {
       setAddFormSaving(false);
     }
-  }, [addForm, apps, supabase, clearDraft]);
+  }, [addForm, supabase, clearDraft]);
 
   const getApps = (col: Column) => apps.filter((a) => a.status === col);
 

@@ -427,10 +427,14 @@ export async function clearAllData(supabase: SupabaseClient | null): Promise<voi
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function getApplications(supabase: SupabaseClient | null): Promise<any[]> {
   if (supabase) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('applications')
       .select('*')
       .order('applied_at', { ascending: false });
+    if (error) {
+      console.error('[Jobpilot] getApplications error:', error.message, error);
+      return [];
+    }
     return (data ?? []).map((row) => ({
       id: row.id,
       jobTitle: row.job_title,
@@ -449,23 +453,110 @@ export async function saveApplications(supabase: SupabaseClient | null, apps: an
   if (supabase) {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-      await supabase.from('applications').delete().eq('user_id', user.id);
-      if (apps.length > 0) {
-        await supabase.from('applications').insert(
-          apps.map((a) => ({
-            user_id: user.id,
-            job_title: a.jobTitle,
-            company: a.company,
-            status: a.status ?? 'applied',
-            applied_at: a.appliedAt ?? new Date().toISOString(),
-            notes: a.notes ?? '',
-          }))
-        );
+      if (apps.length === 0) {
+        // Only delete all when explicitly clearing
+        const { error: delErr } = await supabase.from('applications').delete().eq('user_id', user.id);
+        if (delErr) console.error('[Jobpilot] deleteApplications error:', delErr.message, delErr);
+      } else {
+        // Upsert all applications — safe even if table is empty
+        const rows = apps.map((a) => ({
+          id: a.id, // preserve the UUID from the client
+          user_id: user.id,
+          job_title: a.jobTitle,
+          company: a.company,
+          status: a.status ?? 'applied',
+          applied_at: a.appliedAt ?? new Date().toISOString(),
+          notes: a.notes ?? '',
+        }));
+        const { error: upsertErr } = await supabase
+          .from('applications')
+          .upsert(rows, { onConflict: 'id' });
+        if (upsertErr) {
+          console.error('[Jobpilot] saveApplications upsert error:', upsertErr.message, upsertErr);
+        }
       }
       return;
     }
   }
   localStorage.setItem('jobpilot_applications', JSON.stringify(apps));
+}
+
+// Insert a single application (used by addApplication for efficiency)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function insertApplication(supabase: SupabaseClient | null, app: any): Promise<boolean> {
+  if (supabase) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { error } = await supabase.from('applications').insert({
+        id: app.id,
+        user_id: user.id,
+        job_title: app.jobTitle,
+        company: app.company,
+        status: app.status ?? 'applied',
+        applied_at: app.appliedAt ?? new Date().toISOString(),
+        notes: app.notes ?? '',
+      });
+      if (error) {
+        console.error('[Jobpilot] insertApplication error:', error.message, error);
+        return false;
+      }
+      return true;
+    }
+  }
+  // localStorage path — append to existing list
+  const raw = localStorage.getItem('jobpilot_applications');
+  const existing = raw ? JSON.parse(raw) : [];
+  existing.unshift(app);
+  localStorage.setItem('jobpilot_applications', JSON.stringify(existing));
+  return true;
+}
+
+// Delete a single application by ID
+export async function deleteApplication(supabase: SupabaseClient | null, appId: string): Promise<boolean> {
+  if (supabase) {
+    const { error } = await supabase.from('applications').delete().eq('id', appId);
+    if (error) {
+      console.error('[Jobpilot] deleteApplication error:', error.message, error);
+      return false;
+    }
+    return true;
+  }
+  // localStorage path
+  const raw = localStorage.getItem('jobpilot_applications');
+  const existing = raw ? JSON.parse(raw) : [];
+  localStorage.setItem('jobpilot_applications', JSON.stringify(existing.filter((a: { id: string }) => a.id !== appId)));
+  return true;
+}
+
+// Update a single application field (e.g., status change)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function updateApplication(supabase: SupabaseClient | null, appId: string, updates: Record<string, any>): Promise<boolean> {
+  if (supabase) {
+    // Map camelCase keys to snake_case for Supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const dbUpdates: Record<string, any> = {};
+    if ('status' in updates) dbUpdates.status = updates.status;
+    if ('jobTitle' in updates) dbUpdates.job_title = updates.jobTitle;
+    if ('company' in updates) dbUpdates.company = updates.company;
+    if ('appliedAt' in updates) dbUpdates.applied_at = updates.appliedAt;
+    if ('notes' in updates) dbUpdates.notes = updates.notes;
+
+    const { error } = await supabase.from('applications').update(dbUpdates).eq('id', appId);
+    if (error) {
+      console.error('[Jobpilot] updateApplication error:', error.message, error);
+      return false;
+    }
+    return true;
+  }
+  // localStorage path — update in full list
+  const raw = localStorage.getItem('jobpilot_applications');
+  const existing = raw ? JSON.parse(raw) : [];
+  const idx = existing.findIndex((a: { id: string }) => a.id === appId);
+  if (idx >= 0) {
+    existing[idx] = { ...existing[idx], ...updates };
+    localStorage.setItem('jobpilot_applications', JSON.stringify(existing));
+  }
+  return true;
 }
 
 export async function getAppliedJobIds(supabase: SupabaseClient | null): Promise<string[]> {
