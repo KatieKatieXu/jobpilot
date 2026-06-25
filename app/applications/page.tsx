@@ -12,6 +12,7 @@ interface Application {
   date: string;
   status: Column;
   notes?: string;
+  jobDescription?: string;
 }
 
 // Normalize data from both Supabase (jobTitle/appliedAt) and localStorage (role/date)
@@ -24,6 +25,7 @@ function normalizeApp(raw: any): Application {
     date: raw.date ?? (raw.appliedAt ? raw.appliedAt.split('T')[0] : ''),
     status: raw.status ?? 'applied',
     notes: raw.notes ?? '',
+    jobDescription: raw.jobDescription ?? '',
   };
 }
 
@@ -39,16 +41,16 @@ const columns: { id: Column; label: string; icon: string }[] = [
 
 
 // Custom dropdown component for status change
-function StatusDropdown({ 
-  currentStatus, 
-  onMove 
-}: { 
-  currentStatus: Column; 
+function StatusDropdown({
+  currentStatus,
+  onMove
+}: {
+  currentStatus: Column;
   onMove: (status: Column) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  
+
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -61,10 +63,9 @@ function StatusDropdown({
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
-  
-  const currentCol = columns.find((c) => c.id === currentStatus);
+
   const otherCols = columns.filter((c) => c.id !== currentStatus);
-  
+
   return (
     <div className="relative" ref={dropdownRef}>
       <button
@@ -74,7 +75,7 @@ function StatusDropdown({
         <span>Move to →</span>
         <span className="text-[10px]">{isOpen ? '▲' : '▼'}</span>
       </button>
-      
+
       {isOpen && (
         <div className="absolute bottom-full left-0 right-0 mb-1 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 overflow-hidden">
           {otherCols.map((col) => (
@@ -96,6 +97,66 @@ function StatusDropdown({
   );
 }
 
+// Expandable application card with JD viewer
+function AppCard({
+  app,
+  onMove,
+  onRemove,
+}: {
+  app: Application;
+  onMove: (status: Column) => void;
+  onRemove: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const hasJD = app.jobDescription && app.jobDescription.trim().length > 0;
+
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 group">
+      <div className="flex items-start justify-between mb-0.5">
+        <div className="text-sm font-semibold text-white">{app.company}</div>
+        <button
+          onClick={onRemove}
+          className="text-slate-700 hover:text-slate-400 text-xs opacity-0 group-hover:opacity-100 transition-all ml-2 flex-shrink-0"
+          title="Remove"
+        >✕</button>
+      </div>
+      <div className="text-xs text-slate-400 mb-1">{app.role}</div>
+      {app.notes && (
+        <div className="text-xs text-slate-500 mb-1 truncate" title={app.notes}>
+          📝 {app.notes}
+        </div>
+      )}
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-xs text-slate-600">{app.date}</span>
+        {hasJD && (
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="text-xs text-violet-400 hover:text-violet-300 transition flex items-center gap-1"
+            title="View job description"
+          >
+            📄 JD {expanded ? '▲' : '▼'}
+          </button>
+        )}
+      </div>
+
+      {/* Expanded JD view */}
+      {expanded && hasJD && (
+        <div className="mb-3 p-3 bg-slate-800/60 border border-slate-700/50 rounded-lg">
+          <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Job Description</p>
+          <p className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">{app.jobDescription}</p>
+        </div>
+      )}
+
+      {/* Move dropdown */}
+      <StatusDropdown
+        currentStatus={app.status}
+        onMove={onMove}
+      />
+    </div>
+  );
+}
+
+
 const DRAFT_KEY = 'jobpilot_app_draft';
 const CACHE_KEY = 'jobpilot_apps_cache'; // write-through cache for instant tab-switch
 
@@ -105,6 +166,7 @@ interface AppDraft {
   date: string;
   status: Column;
   notes: string;
+  jobDescription: string;
 }
 
 function emptyDraft(): AppDraft {
@@ -114,6 +176,7 @@ function emptyDraft(): AppDraft {
     date: new Date().toISOString().split('T')[0],
     status: 'applied',
     notes: '',
+    jobDescription: '',
   };
 }
 
@@ -121,6 +184,7 @@ export default function ApplicationsPage() {
   const supabase = useSupabase();
   const [apps, setApps] = useState<Application[]>([]);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
 
   // Add Application form state
   const [showAddForm, setShowAddForm] = useState(false);
@@ -160,7 +224,7 @@ export default function ApplicationsPage() {
     setAddForm((prev: AppDraft) => {
       const next = updater(prev);
       // Save draft if any field has content
-      if (next.company || next.role || next.notes) {
+      if (next.company || next.role || next.notes || next.jobDescription) {
         localStorage.setItem(DRAFT_KEY, JSON.stringify(next));
       }
       return next;
@@ -188,22 +252,7 @@ export default function ApplicationsPage() {
   const moveApp = useCallback((id: string | number, newStatus: Column) => {
     setAppsWithCache((prev) => {
       const updated = prev.map((a) => (a.id === id ? { ...a, status: newStatus } : a));
-      // Use single-row update instead of bulk delete/insert
       updateApplication(supabase, String(id), { status: newStatus });
-
-      // Sync applied badge on jobs board (localStorage only — jobs page reads this)
-      if (!supabase) {
-        const savedApplied = localStorage.getItem('jobpilot_applied');
-        let appliedIds: (string | number)[] = [];
-        try { appliedIds = savedApplied ? JSON.parse(savedApplied) : []; } catch {}
-        const appliedSet = new Set(appliedIds);
-        if (newStatus === 'rejected' || newStatus === 'saved') {
-          appliedSet.delete(id);
-        } else {
-          appliedSet.add(id);
-        }
-        localStorage.setItem('jobpilot_applied', JSON.stringify([...appliedSet]));
-      }
       return updated;
     });
   }, [supabase, setAppsWithCache]);
@@ -211,15 +260,7 @@ export default function ApplicationsPage() {
   const removeApp = useCallback((id: string | number) => {
     setAppsWithCache((prev) => {
       const updated = prev.filter((a) => a.id !== id);
-      // Use single-row delete instead of bulk delete/insert
       deleteApplication(supabase, String(id));
-      // Remove from applied set too (localStorage only)
-      if (!supabase) {
-        const savedApplied = localStorage.getItem('jobpilot_applied');
-        let appliedIds: (string | number)[] = [];
-        try { appliedIds = savedApplied ? JSON.parse(savedApplied) : []; } catch {}
-        localStorage.setItem('jobpilot_applied', JSON.stringify(appliedIds.filter((i) => i !== id)));
-      }
       return updated;
     });
   }, [supabase, setAppsWithCache]);
@@ -236,9 +277,10 @@ export default function ApplicationsPage() {
         date: addForm.date || new Date().toISOString().split('T')[0],
         status: addForm.status,
         notes: addForm.notes.trim(),
+        jobDescription: addForm.jobDescription.trim(),
       };
 
-      // Persist single row — much safer than delete-all/insert-all
+      // Persist single row
       const dbRow = {
         id: newApp.id,
         jobTitle: newApp.role,
@@ -246,6 +288,7 @@ export default function ApplicationsPage() {
         status: newApp.status,
         appliedAt: newApp.date ? `${newApp.date}T00:00:00.000Z` : new Date().toISOString(),
         notes: newApp.notes ?? '',
+        jobDescription: newApp.jobDescription ?? '',
       };
       const success = await insertApplication(supabase, dbRow);
       if (!success) {
@@ -264,7 +307,18 @@ export default function ApplicationsPage() {
     }
   }, [addForm, supabase, clearDraft, setAppsWithCache]);
 
-  const getApps = (col: Column) => apps.filter((a) => a.status === col);
+  // Search filtering
+  const searchLower = search.toLowerCase().trim();
+  const filteredApps = searchLower
+    ? apps.filter((a) =>
+        a.company.toLowerCase().includes(searchLower) ||
+        a.role.toLowerCase().includes(searchLower) ||
+        (a.notes ?? '').toLowerCase().includes(searchLower) ||
+        (a.jobDescription ?? '').toLowerCase().includes(searchLower)
+      )
+    : apps;
+
+  const getApps = (col: Column) => filteredApps.filter((a) => a.status === col);
 
   return (
     <AppLayout>
@@ -290,11 +344,40 @@ export default function ApplicationsPage() {
           </div>
         )}
 
+        {/* Search bar — only show when there are apps */}
+        {apps.length > 0 && (
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">🔍</span>
+            <input
+              className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-4 py-2.5 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-violet-500 transition"
+              placeholder="Search by company, role, or notes..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 text-xs"
+              >✕</button>
+            )}
+          </div>
+        )}
+
+        {/* Search results count */}
+        {search && (
+          <p className="text-xs text-slate-500">
+            {filteredApps.length} result{filteredApps.length !== 1 ? 's' : ''} for &quot;{search}&quot;
+          </p>
+        )}
+
         {/* Add Application form — inline, collapsible */}
         {showAddForm && (
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
-            <h3 className="text-sm font-semibold text-white">Add external application</h3>
-            <p className="text-xs text-slate-500">Track a job you applied to outside the platform.</p>
+            <div>
+              <h3 className="text-sm font-semibold text-white">Add application</h3>
+              <p className="text-xs text-slate-500 mt-1">Track a job you applied to externally.</p>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <input
                 className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-violet-500 transition"
@@ -332,20 +415,44 @@ export default function ApplicationsPage() {
                 </select>
               </div>
             </div>
-            <textarea
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-violet-500 transition resize-none"
-              placeholder="Notes (optional) — e.g. referral from Alex, applied via company site"
-              rows={2}
-              value={addForm.notes}
-              onChange={(e) => updateForm((f) => ({ ...f, notes: e.target.value }))}
-            />
+
+            {/* Job Description — with coaching guidance */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-slate-400">Job Description Key Points</label>
+                <span className="text-[10px] text-violet-400">Recommended</span>
+              </div>
+              <textarea
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-violet-500 transition resize-none"
+                placeholder="Paste the key requirements, responsibilities, or qualifications from the job posting..."
+                rows={4}
+                value={addForm.jobDescription}
+                onChange={(e) => updateForm((f) => ({ ...f, jobDescription: e.target.value }))}
+              />
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                💡 Job postings often disappear after a few weeks. When you get an interview call later, you&apos;ll want to review what they were looking for. Save the key points now — future you will thank you.
+              </p>
+            </div>
+
+            {/* Notes */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-400">Notes</label>
+              <textarea
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-violet-500 transition resize-none"
+                placeholder="e.g. Referral from Alex, applied via company site, recruiter reached out on LinkedIn"
+                rows={2}
+                value={addForm.notes}
+                onChange={(e) => updateForm((f) => ({ ...f, notes: e.target.value }))}
+              />
+            </div>
+
             <div className="flex gap-2">
               <button
                 onClick={addApplication}
                 disabled={addFormSaving || !addForm.company.trim() || !addForm.role.trim()}
                 className="px-5 py-2 bg-violet-600 hover:bg-violet-500 disabled:bg-slate-700 disabled:text-slate-500 text-white text-sm font-semibold rounded-lg transition"
               >
-                {addFormSaving ? 'Saving...' : 'Save'}
+                {addFormSaving ? 'Saving...' : 'Save Application'}
               </button>
               <button
                 onClick={() => {
@@ -366,8 +473,8 @@ export default function ApplicationsPage() {
           <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
             <div className="text-5xl mb-4">📋</div>
             <h3 className="text-lg font-semibold text-slate-300 mb-2">No applications yet</h3>
-            <p className="text-slate-500 text-sm mb-6">
-              Start tracking your job applications — add ones you&apos;ve already submitted, or mark jobs as applied from the Job Board.
+            <p className="text-slate-500 text-sm mb-6 max-w-sm">
+              Start tracking your job applications here. Save the job description when you add one — you&apos;ll need it when the interview call comes.
             </p>
             <button
               onClick={() => setShowAddForm(true)}
@@ -397,34 +504,16 @@ export default function ApplicationsPage() {
                 <div className="space-y-3 min-h-[120px]">
                   {colApps.length === 0 && (
                     <div className="border-2 border-dashed border-slate-800 rounded-xl h-24 flex items-center justify-center text-xs text-slate-600">
-                      Empty
+                      {search ? 'No matches' : 'Empty'}
                     </div>
                   )}
                   {colApps.map((app) => (
-                    <div key={app.id} className="bg-slate-900 border border-slate-800 rounded-xl p-4 group">
-                      <div className="flex items-start justify-between mb-0.5">
-                        <div className="text-sm font-semibold text-white">{app.company}</div>
-                        <button
-                          onClick={() => removeApp(app.id)}
-                          className="text-slate-700 hover:text-slate-400 text-xs opacity-0 group-hover:opacity-100 transition-all ml-2 flex-shrink-0"
-                          title="Remove"
-                        >✕</button>
-                      </div>
-                      <div className="text-xs text-slate-400 mb-1">{app.role}</div>
-                      {app.notes && (
-                        <div className="text-xs text-slate-500 mb-1 truncate" title={app.notes}>
-                          📝 {app.notes}
-                        </div>
-                      )}
-                      <div className="text-xs text-slate-600 mb-3">
-                        {app.date}
-                      </div>
-                      {/* Move dropdown */}
-                      <StatusDropdown
-                        currentStatus={app.status}
-                        onMove={(newStatus) => moveApp(app.id, newStatus)}
-                      />
-                    </div>
+                    <AppCard
+                      key={app.id}
+                      app={app}
+                      onMove={(newStatus) => moveApp(app.id, newStatus)}
+                      onRemove={() => removeApp(app.id)}
+                    />
                   ))}
                 </div>
               </div>

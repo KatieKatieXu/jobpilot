@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import AppLayout from '@/components/AppLayout';
 import { useSupabase } from '@/app/hooks/useSupabase';
-import { getProfile, getApplications, getJobs, getResumeReport, getMarketReport } from '@/app/lib/db';
+import { getProfile, getApplications, getJobs, getResumeReport, getMarketReport, getExperienceEntries } from '@/app/lib/db';
+import WelcomeModal from '@/app/components/WelcomeModal';
+import OnboardingChecklist from '@/app/components/OnboardingChecklist';
 
 interface Profile {
   fullName?: string;
@@ -79,6 +81,8 @@ export default function DashboardPage() {
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [hasMarket, setHasMarket] = useState(false);
   const [hasResume, setHasResume] = useState(false);
+  const [hasStories, setHasStories] = useState(false);
+  const [hasApps, setHasApps] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -100,6 +104,12 @@ export default function DashboardPage() {
       setAppliedCount(apps.filter((a: Application) => a.status === 'applied').length);
       setInterviewCount(apps.filter((a: Application) => a.status === 'interviewing').length);
       setOfferCount(apps.filter((a: Application) => a.status === 'offer').length);
+      setHasApps(apps.length > 0);
+
+      // Stories
+      const stories = await getExperienceEntries(supabase);
+      if (cancelled) return;
+      setHasStories(stories.length > 0);
 
       // Market & resume reports
       const resumeReport = await getResumeReport(supabase);
@@ -180,14 +190,24 @@ export default function DashboardPage() {
 
   return (
     <AppLayout>
+      <WelcomeModal />
       <div className="max-w-5xl mx-auto space-y-8">
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold text-white">
             {profile.fullName ? `Welcome back, ${profile.fullName.split(' ')[0]} 👋` : 'Dashboard'}
           </h1>
-          <p className="text-slate-400 mt-1">Here's what's happening with your job search.</p>
+          <p className="text-slate-400 mt-1">Your path to your next role starts here.</p>
         </div>
+
+        {/* Onboarding checklist — shown until all steps are done */}
+        <OnboardingChecklist
+          hasProfile={profileStrength >= 30}
+          hasResume={hasResume}
+          hasStories={hasStories}
+          hasMarket={hasMarket}
+          hasApplications={hasApps}
+        />
 
         {/* Profile summary card */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 flex items-center gap-6">

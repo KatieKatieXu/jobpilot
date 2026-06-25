@@ -28,12 +28,12 @@ export default function Home() {
 
         {/* Headline */}
         <h2 className="text-3xl sm:text-4xl font-semibold text-slate-100 mb-4 leading-tight">
-          Find your dream job.
+          Your AI coach to
           <br />
-          <span className="text-violet-400">We do the heavy lifting.</span>
+          <span className="text-violet-400">land the next role.</span>
         </h2>
         <p className="text-slate-400 text-lg mb-10">
-          Smart job matching, application tracking, and market analysis — all in one place.
+          Sharpen your resume, build interview stories, understand your market — and track it all in one place.
         </p>
 
         {/* CTA */}
@@ -57,11 +57,12 @@ export default function Home() {
         )}
 
         {/* Features */}
-        <div className="mt-16 grid grid-cols-3 gap-6 text-center">
+        <div className="mt-16 grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
           {[
-            { icon: '🎯', title: 'Smart Matching', desc: 'AI-curated jobs that fit your profile' },
-            { icon: '📊', title: 'Market Intel', desc: 'Know your positioning vs. the market' },
-            { icon: '🚀', title: 'Auto-Apply', desc: 'Pre-filled forms, one-click apply' },
+            { icon: '📄', title: 'Resume Prep', desc: 'AI-powered analysis and optimization' },
+            { icon: '📖', title: 'Story Bank', desc: 'STAR-format stories for interviews' },
+            { icon: '📊', title: 'Market Insights', desc: 'Know your positioning and fit' },
+            { icon: '📋', title: 'Track Applications', desc: 'From applied to offer, all in one place' },
           ].map((f) => (
             <div key={f.title} className="bg-slate-900 border border-slate-800 rounded-xl p-5">
               <div className="text-2xl mb-2">{f.icon}</div>

@@ -442,6 +442,7 @@ export async function getApplications(supabase: SupabaseClient | null): Promise<
       status: row.status,
       appliedAt: row.applied_at,
       notes: row.notes,
+      jobDescription: row.job_description ?? '',
     }));
   }
   const raw = localStorage.getItem('jobpilot_applications');
@@ -467,6 +468,7 @@ export async function saveApplications(supabase: SupabaseClient | null, apps: an
           status: a.status ?? 'applied',
           applied_at: a.appliedAt ?? new Date().toISOString(),
           notes: a.notes ?? '',
+          job_description: a.jobDescription ?? '',
         }));
         const { error: upsertErr } = await supabase
           .from('applications')
@@ -495,6 +497,7 @@ export async function insertApplication(supabase: SupabaseClient | null, app: an
         status: app.status ?? 'applied',
         applied_at: app.appliedAt ?? new Date().toISOString(),
         notes: app.notes ?? '',
+        job_description: app.jobDescription ?? '',
       });
       if (error) {
         console.error('[Jobpilot] insertApplication error:', error.message, error);
@@ -540,6 +543,7 @@ export async function updateApplication(supabase: SupabaseClient | null, appId: 
     if ('company' in updates) dbUpdates.company = updates.company;
     if ('appliedAt' in updates) dbUpdates.applied_at = updates.appliedAt;
     if ('notes' in updates) dbUpdates.notes = updates.notes;
+    if ('jobDescription' in updates) dbUpdates.job_description = updates.jobDescription;
 
     const { error } = await supabase.from('applications').update(dbUpdates).eq('id', appId);
     if (error) {
