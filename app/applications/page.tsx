@@ -98,12 +98,20 @@ function StatusDropdown({
 
 const DRAFT_KEY = 'jobpilot_app_draft';
 
-function emptyDraft() {
+interface AppDraft {
+  company: string;
+  role: string;
+  date: string;
+  status: Column;
+  notes: string;
+}
+
+function emptyDraft(): AppDraft {
   return {
     company: '',
     role: '',
     date: new Date().toISOString().split('T')[0],
-    status: 'applied' as Column,
+    status: 'applied',
     notes: '',
   };
 }
@@ -132,8 +140,8 @@ export default function ApplicationsPage() {
   const [addFormSaving, setAddFormSaving] = useState(false);
 
   // Persist draft to localStorage whenever form changes
-  const updateForm = useCallback((updater: (prev: typeof addForm) => typeof addForm) => {
-    setAddForm((prev) => {
+  const updateForm = useCallback((updater: (prev: AppDraft) => AppDraft) => {
+    setAddForm((prev: AppDraft) => {
       const next = updater(prev);
       // Save draft if any field has content
       if (next.company || next.role || next.notes) {
