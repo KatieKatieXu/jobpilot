@@ -209,10 +209,10 @@ export default function ApplicationDetailPage() {
               <select
                 value={app.status}
                 onChange={(e) => handleStatusChange(e.target.value as Column)}
-                className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-violet-500 transition"
+                className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-violet-500 transition [&>option]:bg-slate-800 [&>option]:text-white"
               >
                 {allStatuses.map((s) => (
-                  <option key={s} value={s}>
+                  <option key={s} value={s} className="bg-slate-800 text-white">
                     {statusConfig[s].icon} {statusConfig[s].label}
                   </option>
                 ))}
