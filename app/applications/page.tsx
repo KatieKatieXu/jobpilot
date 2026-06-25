@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { useSupabase } from '@/app/hooks/useSupabase';
 import { getApplications, insertApplication, deleteApplication, updateApplication } from '@/app/lib/db';
@@ -97,57 +98,49 @@ function StatusDropdown({
   );
 }
 
-// Expandable application card with JD viewer
+// Application card — clickable to open detail page
 function AppCard({
   app,
   onMove,
   onRemove,
+  onClick,
 }: {
   app: Application;
   onMove: (status: Column) => void;
   onRemove: () => void;
+  onClick: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
   const hasJD = app.jobDescription && app.jobDescription.trim().length > 0;
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 group">
-      <div className="flex items-start justify-between mb-0.5">
-        <div className="text-sm font-semibold text-white">{app.company}</div>
-        <button
-          onClick={onRemove}
-          className="text-slate-700 hover:text-slate-400 text-xs opacity-0 group-hover:opacity-100 transition-all ml-2 flex-shrink-0"
-          title="Remove"
-        >✕</button>
-      </div>
-      <div className="text-xs text-slate-400 mb-1">{app.role}</div>
-      {app.notes && (
-        <div className="text-xs text-slate-500 mb-1 truncate" title={app.notes}>
-          📝 {app.notes}
-        </div>
-      )}
-      <div className="flex items-center gap-2 mb-3">
-        <span className="text-xs text-slate-600">{app.date}</span>
-        {hasJD && (
+    <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 group hover:border-slate-700 transition">
+      {/* Clickable area — opens detail page */}
+      <div className="cursor-pointer" onClick={onClick}>
+        <div className="flex items-start justify-between mb-0.5">
+          <div className="text-sm font-semibold text-white group-hover:text-violet-300 transition">{app.company}</div>
           <button
-            onClick={() => setExpanded(!expanded)}
-            className="text-xs text-violet-400 hover:text-violet-300 transition flex items-center gap-1"
-            title="View job description"
-          >
-            📄 JD {expanded ? '▲' : '▼'}
-          </button>
+            onClick={(e) => { e.stopPropagation(); onRemove(); }}
+            className="text-slate-700 hover:text-slate-400 text-xs opacity-0 group-hover:opacity-100 transition-all ml-2 flex-shrink-0"
+            title="Remove"
+          >✕</button>
+        </div>
+        <div className="text-xs text-slate-400 mb-1">{app.role}</div>
+        {app.notes && (
+          <div className="text-xs text-slate-500 mb-1 truncate" title={app.notes}>
+            📝 {app.notes}
+          </div>
         )}
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-xs text-slate-600">{app.date}</span>
+          {hasJD && (
+            <span className="text-xs text-violet-400 flex items-center gap-1" title="Job description saved">
+              📄 JD
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Expanded JD view */}
-      {expanded && hasJD && (
-        <div className="mb-3 p-3 bg-slate-800/60 border border-slate-700/50 rounded-lg">
-          <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Job Description</p>
-          <p className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">{app.jobDescription}</p>
-        </div>
-      )}
-
-      {/* Move dropdown */}
+      {/* Move dropdown — outside clickable area */}
       <StatusDropdown
         currentStatus={app.status}
         onMove={onMove}
@@ -182,6 +175,7 @@ function emptyDraft(): AppDraft {
 
 export default function ApplicationsPage() {
   const supabase = useSupabase();
+  const router = useRouter();
   const [apps, setApps] = useState<Application[]>([]);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -513,6 +507,7 @@ export default function ApplicationsPage() {
                       app={app}
                       onMove={(newStatus) => moveApp(app.id, newStatus)}
                       onRemove={() => removeApp(app.id)}
+                      onClick={() => router.push(`/applications/${app.id}`)}
                     />
                   ))}
                 </div>

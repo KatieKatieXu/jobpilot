@@ -450,6 +450,36 @@ export async function getApplications(supabase: SupabaseClient | null): Promise<
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getApplicationById(supabase: SupabaseClient | null, appId: string): Promise<any | null> {
+  if (supabase) {
+    const { data, error } = await supabase
+      .from('applications')
+      .select('*')
+      .eq('id', appId)
+      .single();
+    if (error || !data) {
+      console.error('[Jobpilot] getApplicationById error:', error?.message);
+      return null;
+    }
+    return {
+      id: data.id,
+      jobTitle: data.job_title,
+      company: data.company,
+      status: data.status,
+      appliedAt: data.applied_at,
+      notes: data.notes,
+      jobDescription: data.job_description ?? '',
+    };
+  }
+  // localStorage fallback
+  const raw = localStorage.getItem('jobpilot_applications');
+  if (!raw) return null;
+  const apps = JSON.parse(raw);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return apps.find((a: any) => a.id === appId) ?? null;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function saveApplications(supabase: SupabaseClient | null, apps: any[]): Promise<void> {
   if (supabase) {
     const { data: { user } } = await supabase.auth.getUser();
