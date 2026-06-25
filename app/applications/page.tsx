@@ -96,20 +96,56 @@ function StatusDropdown({
   );
 }
 
-export default function ApplicationsPage() {
-  const supabase = useSupabase();
-  const [apps, setApps] = useState<Application[]>([]);
+const DRAFT_KEY = 'jobpilot_app_draft';
 
-  // Add Application form state
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [addForm, setAddForm] = useState({
+function emptyDraft() {
+  return {
     company: '',
     role: '',
     date: new Date().toISOString().split('T')[0],
     status: 'applied' as Column,
     notes: '',
+  };
+}
+
+export default function ApplicationsPage() {
+  const supabase = useSupabase();
+  const [apps, setApps] = useState<Application[]>([]);
+
+  // Add Application form state — restore draft from localStorage
+  const [showAddForm, setShowAddForm] = useState(() => {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      return raw ? true : false;
+    } catch { return false; }
+  });
+  const [addForm, setAddForm] = useState(() => {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (raw) {
+        const saved = JSON.parse(raw);
+        return { ...emptyDraft(), ...saved };
+      }
+    } catch {}
+    return emptyDraft();
   });
   const [addFormSaving, setAddFormSaving] = useState(false);
+
+  // Persist draft to localStorage whenever form changes
+  const updateForm = useCallback((updater: (prev: typeof addForm) => typeof addForm) => {
+    setAddForm((prev) => {
+      const next = updater(prev);
+      // Save draft if any field has content
+      if (next.company || next.role || next.notes) {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(next));
+      }
+      return next;
+    });
+  }, []);
+
+  const clearDraft = useCallback(() => {
+    localStorage.removeItem(DRAFT_KEY);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -197,19 +233,14 @@ export default function ApplicationsPage() {
         }))
       );
 
-      // Reset form
-      setAddForm({
-        company: '',
-        role: '',
-        date: new Date().toISOString().split('T')[0],
-        status: 'applied',
-        notes: '',
-      });
+      // Reset form + clear draft
+      clearDraft();
+      setAddForm(emptyDraft());
       setShowAddForm(false);
     } finally {
       setAddFormSaving(false);
     }
-  }, [addForm, apps, supabase]);
+  }, [addForm, apps, supabase, clearDraft]);
 
   const getApps = (col: Column) => apps.filter((a) => a.status === col);
 
@@ -218,7 +249,7 @@ export default function ApplicationsPage() {
       <div className="max-w-full space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-white">Applications</h1>
+            <h1 className="text-2xl font-bold text-white">Application Tracking</h1>
             <p className="text-slate-400 mt-1">Track your job application pipeline.</p>
           </div>
           <button
@@ -239,13 +270,13 @@ export default function ApplicationsPage() {
                 className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-violet-500 transition"
                 placeholder="Company *"
                 value={addForm.company}
-                onChange={(e) => setAddForm((f) => ({ ...f, company: e.target.value }))}
+                onChange={(e) => updateForm((f) => ({ ...f, company: e.target.value }))}
               />
               <input
                 className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-violet-500 transition"
                 placeholder="Role / Title *"
                 value={addForm.role}
-                onChange={(e) => setAddForm((f) => ({ ...f, role: e.target.value }))}
+                onChange={(e) => updateForm((f) => ({ ...f, role: e.target.value }))}
               />
               <div className="space-y-1">
                 <label className="text-xs text-slate-500">Date Applied</label>
@@ -253,7 +284,7 @@ export default function ApplicationsPage() {
                   type="date"
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-violet-500 transition"
                   value={addForm.date}
-                  onChange={(e) => setAddForm((f) => ({ ...f, date: e.target.value }))}
+                  onChange={(e) => updateForm((f) => ({ ...f, date: e.target.value }))}
                 />
               </div>
               <div className="space-y-1">
@@ -261,7 +292,7 @@ export default function ApplicationsPage() {
                 <select
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-violet-500 transition"
                   value={addForm.status}
-                  onChange={(e) => setAddForm((f) => ({ ...f, status: e.target.value as Column }))}
+                  onChange={(e) => updateForm((f) => ({ ...f, status: e.target.value as Column }))}
                 >
                   {columns.map((col) => (
                     <option key={col.id} value={col.id}>
@@ -276,7 +307,7 @@ export default function ApplicationsPage() {
               placeholder="Notes (optional) — e.g. referral from Alex, applied via company site"
               rows={2}
               value={addForm.notes}
-              onChange={(e) => setAddForm((f) => ({ ...f, notes: e.target.value }))}
+              onChange={(e) => updateForm((f) => ({ ...f, notes: e.target.value }))}
             />
             <div className="flex gap-2">
               <button
@@ -289,7 +320,8 @@ export default function ApplicationsPage() {
               <button
                 onClick={() => {
                   setShowAddForm(false);
-                  setAddForm({ company: '', role: '', date: new Date().toISOString().split('T')[0], status: 'applied', notes: '' });
+                  setAddForm(emptyDraft());
+                  clearDraft();
                 }}
                 className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded-lg transition"
               >

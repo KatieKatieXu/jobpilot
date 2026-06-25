@@ -15,7 +15,7 @@ const inputItems = [
 const mainItems = [
   { href: '/dashboard', label: 'Dashboard', icon: '📊' },
   { href: '/market', label: 'Market', icon: '📈' },
-  { href: '/applications', label: 'Applications', icon: '📋' },
+  { href: '/applications', label: 'Application Tracking', icon: '📋' },
   { href: '/settings', label: 'Settings', icon: '⚙️' },
 ];
 

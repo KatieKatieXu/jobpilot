@@ -88,11 +88,12 @@ export default function MarketPage() {
     })();
   }, [supabase]);
 
-  const persist = (updatedAnalysis: MarketAnalysis) => {
+  const persist = (updatedAnalysis: MarketAnalysis, profile?: Profile | null) => {
+    const p = profile ?? profileData;
     let ph = '';
-    if (profileData) {
+    if (p) {
       try {
-        ph = hashProfile(profileData as unknown as Record<string, unknown>);
+        ph = hashProfile(p as unknown as Record<string, unknown>);
       } catch {}
     }
 
@@ -123,12 +124,12 @@ export default function MarketPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ profile }),
       });
-      
+
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || 'Failed to analyze');
       }
-      
+
       const data = await res.json();
       const newAnalysis: MarketAnalysis = {
         ...data.analysis,
@@ -137,11 +138,13 @@ export default function MarketPage() {
           status: 'pending' as const,
         })),
       };
-      
+
+      // persist uses the local `profile` variable directly so it works
+      // even if the component unmounts while the fetch was in-flight
       setAnalysis(newAnalysis);
       setHasReport(true);
       setProfileChanged(false);
-      persist(newAnalysis);
+      persist(newAnalysis, profile);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -261,6 +264,7 @@ export default function MarketPage() {
             <div className="text-4xl mb-4 animate-pulse">📊</div>
             <p className="text-slate-300 font-medium">Analyzing your market position…</p>
             <p className="text-slate-500 text-sm mt-2">This may take 10-15 seconds</p>
+            <p className="text-slate-600 text-xs mt-4">Feel free to switch tabs — your results will be saved automatically.</p>
           </div>
         )}
 
