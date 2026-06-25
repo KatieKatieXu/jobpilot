@@ -120,24 +120,22 @@ export default function ApplicationsPage() {
   const supabase = useSupabase();
   const [apps, setApps] = useState<Application[]>([]);
 
-  // Add Application form state — restore draft from localStorage
-  const [showAddForm, setShowAddForm] = useState(() => {
-    try {
-      const raw = localStorage.getItem(DRAFT_KEY);
-      return raw ? true : false;
-    } catch { return false; }
-  });
-  const [addForm, setAddForm] = useState(() => {
+  // Add Application form state
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addForm, setAddForm] = useState<AppDraft>(emptyDraft());
+  const [addFormSaving, setAddFormSaving] = useState(false);
+
+  // Restore draft from localStorage on mount (useEffect runs client-side only)
+  useEffect(() => {
     try {
       const raw = localStorage.getItem(DRAFT_KEY);
       if (raw) {
         const saved = JSON.parse(raw);
-        return { ...emptyDraft(), ...saved };
+        setAddForm({ ...emptyDraft(), ...saved });
+        setShowAddForm(true);
       }
     } catch {}
-    return emptyDraft();
-  });
-  const [addFormSaving, setAddFormSaving] = useState(false);
+  }, []);
 
   // Persist draft to localStorage whenever form changes
   const updateForm = useCallback((updater: (prev: AppDraft) => AppDraft) => {
