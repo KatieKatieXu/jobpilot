@@ -168,7 +168,7 @@ export default function DashboardPage() {
   }, [supabase]);
 
   const statCards = [
-    { label: 'Jobs Saved', value: String(totalJobs), icon: '💼', color: 'text-violet-400', href: '/jobs' },
+    { label: 'Jobs Saved', value: String(totalJobs), icon: '💼', color: 'text-violet-400', href: '/applications' },
     { label: 'Applications', value: String(appliedCount), icon: '📤', color: 'text-blue-400', href: '/applications' },
     { label: 'Interviews', value: String(interviewCount), icon: '📞', color: 'text-green-400', href: '/applications' },
     { label: 'Profile', value: `${profileStrength}%`, icon: '⚡', color: profileStrength >= 80 ? 'text-green-400' : profileStrength >= 50 ? 'text-yellow-400' : 'text-red-400', href: '/profile' },
@@ -232,7 +232,7 @@ export default function DashboardPage() {
               <div className="flex flex-col items-center gap-2">
                 {/* Stories */}
                 <Link href="/stories" className="group">
-                  <div className="w-24 py-2 rounded-lg border-2 border-dashed bg-slate-800/40 border-violet-500/50 hover:border-violet-400 text-center transition">
+                  <div className="w-24 py-2 rounded-lg border-2 bg-slate-800/40 border-violet-500/50 hover:border-violet-400 text-center transition">
                     <span className="text-base">📖</span>
                     <p className="text-xs font-medium text-violet-300">Stories</p>
                   </div>
@@ -256,7 +256,7 @@ export default function DashboardPage() {
                 
                 {/* Resume */}
                 <Link href="/resume" className="group">
-                  <div className={`w-24 py-2 rounded-lg border-2 border-dashed text-center transition ${
+                  <div className={`w-24 py-2 rounded-lg border-2 text-center transition ${
                     hasResume ? 'bg-green-500/10 border-green-500/50' : 'bg-slate-800/40 border-violet-500/50 hover:border-violet-400'
                   }`}>
                     <span className="text-base">{hasResume ? '✓' : '📄'}</span>
@@ -282,24 +282,23 @@ export default function DashboardPage() {
             {/* Arrow */}
             <div className="text-violet-500 text-2xl self-center">→</div>
             
-            {/* Apply */}
-            <Link href="/jobs" className="group self-center">
-              <div className={`w-32 py-4 rounded-xl border-2 text-center transition ${
-                appliedCount > 0 ? 'bg-green-500/10 border-green-500/50' : 'bg-slate-800/80 border-slate-700 hover:border-violet-500'
-              }`}>
-                <span className="text-2xl">{appliedCount > 0 ? '✓' : '💼'}</span>
-                <p className="text-sm font-semibold text-slate-300 mt-1">Apply</p>
-              </div>
-            </Link>
+            {/* Apply Externally — dashed border to show it's outside the platform */}
+            <div className="w-32 py-4 rounded-xl border-2 border-dashed border-slate-600 bg-slate-800/40 text-center self-center">
+              <span className="text-2xl">🌐</span>
+              <p className="text-xs font-semibold text-slate-400 mt-1">Apply Externally</p>
+              <p className="text-[10px] text-slate-500 mt-0.5">LinkedIn, company sites</p>
+            </div>
             
             {/* Arrow */}
             <div className="text-violet-500 text-2xl self-center">→</div>
             
-            {/* Interview */}
+            {/* Application Tracking */}
             <Link href="/applications" className="group self-center">
-              <div className="w-32 py-4 rounded-xl border-2 bg-slate-800/80 border-slate-700 hover:border-violet-500 text-center transition">
-                <span className="text-2xl">🎯</span>
-                <p className="text-sm font-semibold text-slate-300 mt-1">Interview</p>
+              <div className={`w-32 py-4 rounded-xl border-2 text-center transition ${
+                appliedCount > 0 ? 'bg-green-500/10 border-green-500/50' : 'bg-slate-800/80 border-slate-700 hover:border-violet-500'
+              }`}>
+                <span className="text-2xl">{appliedCount > 0 ? '✓' : '📋'}</span>
+                <p className="text-xs font-semibold text-slate-300 mt-1">Tracking</p>
               </div>
             </Link>
             
@@ -340,7 +339,7 @@ export default function DashboardPage() {
             {activity.length === 0 ? (
               <div className="text-center py-8 text-slate-500 text-sm">
                 <p>No activity yet.</p>
-                <Link href="/jobs" className="text-violet-400 hover:text-violet-300 mt-2 inline-block">Browse jobs to get started →</Link>
+                <Link href="/applications" className="text-violet-400 hover:text-violet-300 mt-2 inline-block">Start tracking applications →</Link>
               </div>
             ) : (
               <div className="space-y-3">
@@ -361,11 +360,11 @@ export default function DashboardPage() {
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
             <h3 className="text-base font-semibold text-white mb-4">Quick Actions</h3>
             <div className="space-y-3">
-              <Link href="/jobs" className="flex items-center gap-3 p-3 bg-slate-800 hover:bg-slate-700 rounded-xl transition">
-                <span className="text-xl">🔍</span>
+              <Link href="/applications" className="flex items-center gap-3 p-3 bg-slate-800 hover:bg-slate-700 rounded-xl transition">
+                <span className="text-xl">📋</span>
                 <div>
-                  <p className="text-sm font-medium text-slate-200">Browse Jobs</p>
-                  <p className="text-xs text-slate-500">{totalJobs > 0 ? `${totalJobs} saved jobs` : 'Add jobs to track'}</p>
+                  <p className="text-sm font-medium text-slate-200">Track Applications</p>
+                  <p className="text-xs text-slate-500">{appliedCount > 0 ? `${appliedCount} in pipeline` : 'Add applications to track'}</p>
                 </div>
               </Link>
               <Link href="/resume" className="flex items-center gap-3 p-3 bg-slate-800 hover:bg-slate-700 rounded-xl transition">
@@ -382,13 +381,11 @@ export default function DashboardPage() {
                   <p className="text-xs text-slate-500">{hasMarket ? 'See your positioning' : 'Understand your market fit'}</p>
                 </div>
               </Link>
-              <Link href="/applications" className="flex items-center gap-3 p-3 bg-slate-800 hover:bg-slate-700 rounded-xl transition">
-                <span className="text-xl">📋</span>
+              <Link href="/stories" className="flex items-center gap-3 p-3 bg-slate-800 hover:bg-slate-700 rounded-xl transition">
+                <span className="text-xl">📖</span>
                 <div>
-                  <p className="text-sm font-medium text-slate-200">Track Applications</p>
-                  <p className="text-xs text-slate-500">
-                    {appliedCount > 0 ? `${appliedCount} in pipeline` : 'Kanban board'}
-                  </p>
+                  <p className="text-sm font-medium text-slate-200">Story Bank</p>
+                  <p className="text-xs text-slate-500">STAR-format interview stories</p>
                 </div>
               </Link>
             </div>

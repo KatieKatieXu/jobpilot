@@ -6,11 +6,25 @@ import { useSupabase } from '@/app/hooks/useSupabase';
 import { getApplications, saveApplications } from '@/app/lib/db';
 
 interface Application {
-  id: number;
+  id: string | number;
   company: string;
   role: string;
   date: string;
   status: Column;
+  notes?: string;
+}
+
+// Normalize data from both Supabase (jobTitle/appliedAt) and localStorage (role/date)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function normalizeApp(raw: any): Application {
+  return {
+    id: raw.id,
+    company: raw.company ?? '',
+    role: raw.role ?? raw.jobTitle ?? '',
+    date: raw.date ?? (raw.appliedAt ? raw.appliedAt.split('T')[0] : ''),
+    status: raw.status ?? 'applied',
+    notes: raw.notes ?? '',
+  };
 }
 
 type Column = 'saved' | 'applied' | 'interviewing' | 'offer' | 'rejected';
@@ -86,31 +100,47 @@ export default function ApplicationsPage() {
   const supabase = useSupabase();
   const [apps, setApps] = useState<Application[]>([]);
 
+  // Add Application form state
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addForm, setAddForm] = useState({
+    company: '',
+    role: '',
+    date: new Date().toISOString().split('T')[0],
+    status: 'applied' as Column,
+    notes: '',
+  });
+  const [addFormSaving, setAddFormSaving] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const loaded = await getApplications(supabase);
       if (cancelled) return;
-      if (supabase) {
-        // Authenticated: use DB data (may be empty)
-        setApps(loaded);
-      } else {
-        // Anonymous: use localStorage data
-        setApps(loaded);
-      }
+      setApps(loaded.map(normalizeApp));
     })();
     return () => { cancelled = true; };
   }, [supabase]);
 
-  const moveApp = useCallback((id: number, newStatus: Column) => {
+  // Helper to map apps to the shape saveApplications expects
+  const toDbShape = (list: Application[]) =>
+    list.map((a) => ({
+      id: a.id,
+      jobTitle: a.role,
+      company: a.company,
+      status: a.status,
+      appliedAt: a.date ? `${a.date}T00:00:00.000Z` : new Date().toISOString(),
+      notes: a.notes ?? '',
+    }));
+
+  const moveApp = useCallback((id: string | number, newStatus: Column) => {
     setApps((prev) => {
       const updated = prev.map((a) => (a.id === id ? { ...a, status: newStatus } : a));
-      saveApplications(supabase, updated);
+      saveApplications(supabase, toDbShape(updated));
 
       // Sync applied badge on jobs board (localStorage only — jobs page reads this)
       if (!supabase) {
         const savedApplied = localStorage.getItem('jobpilot_applied');
-        let appliedIds: number[] = [];
+        let appliedIds: (string | number)[] = [];
         try { appliedIds = savedApplied ? JSON.parse(savedApplied) : []; } catch {}
         const appliedSet = new Set(appliedIds);
         if (newStatus === 'rejected' || newStatus === 'saved') {
@@ -124,14 +154,14 @@ export default function ApplicationsPage() {
     });
   }, [supabase]);
 
-  const removeApp = useCallback((id: number) => {
+  const removeApp = useCallback((id: string | number) => {
     setApps((prev) => {
       const updated = prev.filter((a) => a.id !== id);
-      saveApplications(supabase, updated);
+      saveApplications(supabase, toDbShape(updated));
       // Remove from applied set too (localStorage only)
       if (!supabase) {
         const savedApplied = localStorage.getItem('jobpilot_applied');
-        let appliedIds: number[] = [];
+        let appliedIds: (string | number)[] = [];
         try { appliedIds = savedApplied ? JSON.parse(savedApplied) : []; } catch {}
         localStorage.setItem('jobpilot_applied', JSON.stringify(appliedIds.filter((i) => i !== id)));
       }
@@ -139,18 +169,155 @@ export default function ApplicationsPage() {
     });
   }, [supabase]);
 
+  const addApplication = useCallback(async () => {
+    if (!addForm.company.trim() || !addForm.role.trim()) return;
+    setAddFormSaving(true);
+    try {
+      const newApp: Application = {
+        id: crypto.randomUUID(),
+        company: addForm.company.trim(),
+        role: addForm.role.trim(),
+        date: addForm.date || new Date().toISOString().split('T')[0],
+        status: addForm.status,
+        notes: addForm.notes.trim(),
+      };
+      const updated = [newApp, ...apps];
+      setApps(updated);
+
+      // Persist — map to the shape saveApplications expects
+      await saveApplications(
+        supabase,
+        updated.map((a) => ({
+          id: a.id,
+          jobTitle: a.role,
+          company: a.company,
+          status: a.status,
+          appliedAt: a.date ? `${a.date}T00:00:00.000Z` : new Date().toISOString(),
+          notes: a.notes ?? '',
+        }))
+      );
+
+      // Reset form
+      setAddForm({
+        company: '',
+        role: '',
+        date: new Date().toISOString().split('T')[0],
+        status: 'applied',
+        notes: '',
+      });
+      setShowAddForm(false);
+    } finally {
+      setAddFormSaving(false);
+    }
+  }, [addForm, apps, supabase]);
+
   const getApps = (col: Column) => apps.filter((a) => a.status === col);
 
   return (
     <AppLayout>
       <div className="max-w-full space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Applications</h1>
-          <p className="text-slate-400 mt-1">Track your job application pipeline.</p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-white">Applications</h1>
+            <p className="text-slate-400 mt-1">Track your job application pipeline.</p>
+          </div>
+          <button
+            onClick={() => setShowAddForm((o) => !o)}
+            className="self-start sm:self-auto px-4 py-2.5 bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold rounded-lg transition flex items-center gap-2"
+          >
+            <span className="text-lg leading-none">+</span> Add Application
+          </button>
         </div>
 
+        {/* Add Application form — inline, collapsible */}
+        {showAddForm && (
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+            <h3 className="text-sm font-semibold text-white">Add external application</h3>
+            <p className="text-xs text-slate-500">Track a job you applied to outside the platform.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <input
+                className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-violet-500 transition"
+                placeholder="Company *"
+                value={addForm.company}
+                onChange={(e) => setAddForm((f) => ({ ...f, company: e.target.value }))}
+              />
+              <input
+                className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-violet-500 transition"
+                placeholder="Role / Title *"
+                value={addForm.role}
+                onChange={(e) => setAddForm((f) => ({ ...f, role: e.target.value }))}
+              />
+              <div className="space-y-1">
+                <label className="text-xs text-slate-500">Date Applied</label>
+                <input
+                  type="date"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-violet-500 transition"
+                  value={addForm.date}
+                  onChange={(e) => setAddForm((f) => ({ ...f, date: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-slate-500">Status</label>
+                <select
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-violet-500 transition"
+                  value={addForm.status}
+                  onChange={(e) => setAddForm((f) => ({ ...f, status: e.target.value as Column }))}
+                >
+                  {columns.map((col) => (
+                    <option key={col.id} value={col.id}>
+                      {col.icon} {col.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <textarea
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-violet-500 transition resize-none"
+              placeholder="Notes (optional) — e.g. referral from Alex, applied via company site"
+              rows={2}
+              value={addForm.notes}
+              onChange={(e) => setAddForm((f) => ({ ...f, notes: e.target.value }))}
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={addApplication}
+                disabled={addFormSaving || !addForm.company.trim() || !addForm.role.trim()}
+                className="px-5 py-2 bg-violet-600 hover:bg-violet-500 disabled:bg-slate-700 disabled:text-slate-500 text-white text-sm font-semibold rounded-lg transition"
+              >
+                {addFormSaving ? 'Saving...' : 'Save'}
+              </button>
+              <button
+                onClick={() => {
+                  setShowAddForm(false);
+                  setAddForm({ company: '', role: '', date: new Date().toISOString().split('T')[0], status: 'applied', notes: '' });
+                }}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded-lg transition"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Empty state — when no applications exist at all */}
+        {apps.length === 0 && !showAddForm && (
+          <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+            <div className="text-5xl mb-4">📋</div>
+            <h3 className="text-lg font-semibold text-slate-300 mb-2">No applications yet</h3>
+            <p className="text-slate-500 text-sm mb-6">
+              Start tracking your job applications — add ones you&apos;ve already submitted, or mark jobs as applied from the Job Board.
+            </p>
+            <button
+              onClick={() => setShowAddForm(true)}
+              className="px-5 py-2.5 bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold rounded-lg transition flex items-center gap-2"
+            >
+              <span className="text-lg leading-none">+</span> Add Your First Application
+            </button>
+          </div>
+        )}
+
         {/* Kanban */}
-        <div className="flex gap-4 overflow-x-auto pb-4">
+        <div className={`flex gap-4 overflow-x-auto pb-4 ${apps.length === 0 && !showAddForm ? 'hidden' : ''}`}>
           {columns.map((col) => {
             const colApps = getApps(col.id);
             return (
@@ -182,6 +349,11 @@ export default function ApplicationsPage() {
                         >✕</button>
                       </div>
                       <div className="text-xs text-slate-400 mb-1">{app.role}</div>
+                      {app.notes && (
+                        <div className="text-xs text-slate-500 mb-1 truncate" title={app.notes}>
+                          📝 {app.notes}
+                        </div>
+                      )}
                       <div className="text-xs text-slate-600 mb-3">
                         {app.date}
                       </div>
@@ -198,8 +370,8 @@ export default function ApplicationsPage() {
           })}
         </div>
 
-        {/* Summary */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex gap-6 text-center">
+        {/* Summary — only show when there are applications */}
+        <div className={`bg-slate-900 border border-slate-800 rounded-xl p-4 flex gap-6 text-center ${apps.length === 0 && !showAddForm ? 'hidden' : ''}`}>
           {columns.map((col) => (
             <div key={col.id} className="flex-1">
               <div className="text-lg font-bold text-white">{getApps(col.id).length}</div>

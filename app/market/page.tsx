@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
+import { useSupabase } from '@/app/hooks/useSupabase';
+import { getProfile, type Profile } from '@/app/lib/db';
 
 const STORAGE_KEY = 'jobpilot_market_report';
-const PROFILE_KEY = 'jobpilot_profile';
 
 interface MarketAnalysis {
   bestFitRoles: {
@@ -50,6 +51,7 @@ function hashProfile(profile: Record<string, unknown>): string {
 }
 
 export default function MarketPage() {
+  const supabase = useSupabase();
   const [hasReport, setHasReport] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,45 +59,48 @@ export default function MarketPage() {
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [profileChanged, setProfileChanged] = useState(false);
+  const [profileData, setProfileData] = useState<Profile | null>(null);
 
-  // Load saved report on mount
+  // Load profile + saved report on mount
   useEffect(() => {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const profileRaw = localStorage.getItem(PROFILE_KEY);
-    
-    if (raw) {
-      try {
-        const report: MarketReport = JSON.parse(raw);
-        setAnalysis(report.analysis);
-        setSavedAt(report.savedAt);
-        setHasReport(true);
-        
-        // Check if profile changed since last analysis
-        if (profileRaw) {
-          const profile = JSON.parse(profileRaw);
-          const currentHash = hashProfile(profile);
-          if (report.profileHash && report.profileHash !== currentHash) {
-            setProfileChanged(true);
+    (async () => {
+      // Load profile from Supabase (auth'd) or localStorage (anonymous)
+      const profile = await getProfile(supabase);
+      setProfileData(profile);
+
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        try {
+          const report: MarketReport = JSON.parse(raw);
+          setAnalysis(report.analysis);
+          setSavedAt(report.savedAt);
+          setHasReport(true);
+
+          // Check if profile changed since last analysis
+          if (profile) {
+            const currentHash = hashProfile(profile as unknown as Record<string, unknown>);
+            if (report.profileHash && report.profileHash !== currentHash) {
+              setProfileChanged(true);
+            }
           }
-        }
-      } catch {}
-    }
-  }, []);
+        } catch {}
+      }
+    })();
+  }, [supabase]);
 
   const persist = (updatedAnalysis: MarketAnalysis) => {
-    const profileRaw = localStorage.getItem(PROFILE_KEY);
-    let profileHash = '';
-    if (profileRaw) {
+    let ph = '';
+    if (profileData) {
       try {
-        profileHash = hashProfile(JSON.parse(profileRaw));
+        ph = hashProfile(profileData as unknown as Record<string, unknown>);
       } catch {}
     }
-    
+
     const report: MarketReport = {
       analysis: updatedAnalysis,
       answers: {},
       savedAt: new Date().toISOString(),
-      profileHash,
+      profileHash: ph,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(report));
     setSavedAt(report.savedAt);
@@ -104,15 +109,15 @@ export default function MarketPage() {
   const runAnalysis = async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
-      const profileRaw = localStorage.getItem(PROFILE_KEY);
-      if (!profileRaw) {
+      // Fetch fresh profile from Supabase (auth'd) or localStorage (anonymous)
+      const profile = await getProfile(supabase);
+      if (!profile) {
         throw new Error('No profile found. Please complete your profile first.');
       }
-      
-      const profile = JSON.parse(profileRaw);
-      
+      setProfileData(profile);
+
       const res = await fetch('/api/analyze-market', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
