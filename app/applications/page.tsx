@@ -97,6 +97,7 @@ function StatusDropdown({
 }
 
 const DRAFT_KEY = 'jobpilot_app_draft';
+const CACHE_KEY = 'jobpilot_apps_cache'; // write-through cache for instant tab-switch
 
 interface AppDraft {
   company: string;
@@ -119,13 +120,23 @@ function emptyDraft(): AppDraft {
 export default function ApplicationsPage() {
   const supabase = useSupabase();
   const [apps, setApps] = useState<Application[]>([]);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Add Application form state
   const [showAddForm, setShowAddForm] = useState(false);
   const [addForm, setAddForm] = useState<AppDraft>(emptyDraft());
   const [addFormSaving, setAddFormSaving] = useState(false);
 
-  // Restore draft from localStorage on mount (useEffect runs client-side only)
+  // Helper: update apps state AND write-through cache
+  const setAppsWithCache = useCallback((updater: Application[] | ((prev: Application[]) => Application[])) => {
+    setApps((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+
+  // Restore draft + cached apps from localStorage on mount (client-side only)
   useEffect(() => {
     try {
       const raw = localStorage.getItem(DRAFT_KEY);
@@ -133,6 +144,13 @@ export default function ApplicationsPage() {
         const saved = JSON.parse(raw);
         setAddForm({ ...emptyDraft(), ...saved });
         setShowAddForm(true);
+      }
+    } catch {}
+    // Immediately show cached apps (survives tab switch)
+    try {
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (cached) {
+        setApps(JSON.parse(cached).map(normalizeApp));
       }
     } catch {}
   }, []);
@@ -153,18 +171,22 @@ export default function ApplicationsPage() {
     localStorage.removeItem(DRAFT_KEY);
   }, []);
 
+  // Load from Supabase (or localStorage for anon users) and update cache
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const loaded = await getApplications(supabase);
       if (cancelled) return;
-      setApps(loaded.map(normalizeApp));
+      const normalized = loaded.map(normalizeApp);
+      setApps(normalized);
+      // Update cache with authoritative data from Supabase
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify(normalized)); } catch {}
     })();
     return () => { cancelled = true; };
   }, [supabase]);
 
   const moveApp = useCallback((id: string | number, newStatus: Column) => {
-    setApps((prev) => {
+    setAppsWithCache((prev) => {
       const updated = prev.map((a) => (a.id === id ? { ...a, status: newStatus } : a));
       // Use single-row update instead of bulk delete/insert
       updateApplication(supabase, String(id), { status: newStatus });
@@ -184,10 +206,10 @@ export default function ApplicationsPage() {
       }
       return updated;
     });
-  }, [supabase]);
+  }, [supabase, setAppsWithCache]);
 
   const removeApp = useCallback((id: string | number) => {
-    setApps((prev) => {
+    setAppsWithCache((prev) => {
       const updated = prev.filter((a) => a.id !== id);
       // Use single-row delete instead of bulk delete/insert
       deleteApplication(supabase, String(id));
@@ -200,11 +222,12 @@ export default function ApplicationsPage() {
       }
       return updated;
     });
-  }, [supabase]);
+  }, [supabase, setAppsWithCache]);
 
   const addApplication = useCallback(async () => {
     if (!addForm.company.trim() || !addForm.role.trim()) return;
     setAddFormSaving(true);
+    setSaveError(null);
     try {
       const newApp: Application = {
         id: crypto.randomUUID(),
@@ -226,11 +249,11 @@ export default function ApplicationsPage() {
       };
       const success = await insertApplication(supabase, dbRow);
       if (!success) {
-        console.error('[Jobpilot] Failed to save application — check browser console for details');
+        setSaveError('Failed to save to database. Check browser console for details.');
       }
 
-      // Update UI after successful save
-      setApps((prev) => [newApp, ...prev]);
+      // Update UI + write-through cache
+      setAppsWithCache((prev) => [newApp, ...prev]);
 
       // Reset form + clear draft
       clearDraft();
@@ -239,7 +262,7 @@ export default function ApplicationsPage() {
     } finally {
       setAddFormSaving(false);
     }
-  }, [addForm, supabase, clearDraft]);
+  }, [addForm, supabase, clearDraft, setAppsWithCache]);
 
   const getApps = (col: Column) => apps.filter((a) => a.status === col);
 
@@ -258,6 +281,14 @@ export default function ApplicationsPage() {
             <span className="text-lg leading-none">+</span> Add Application
           </button>
         </div>
+
+        {/* Error banner */}
+        {saveError && (
+          <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-center justify-between">
+            <p className="text-sm text-red-400">{saveError}</p>
+            <button onClick={() => setSaveError(null)} className="text-red-400 hover:text-red-300 text-xs ml-4">✕</button>
+          </div>
+        )}
 
         {/* Add Application form — inline, collapsible */}
         {showAddForm && (
