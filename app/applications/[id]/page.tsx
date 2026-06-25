@@ -209,10 +209,11 @@ export default function ApplicationDetailPage() {
               <select
                 value={app.status}
                 onChange={(e) => handleStatusChange(e.target.value as Column)}
-                className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-violet-500 transition [&>option]:bg-slate-800 [&>option]:text-white"
+                className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500 transition"
+                style={{ color: '#ffffff' }}
               >
                 {allStatuses.map((s) => (
-                  <option key={s} value={s} className="bg-slate-800 text-white">
+                  <option key={s} value={s} style={{ backgroundColor: '#1e293b', color: '#ffffff' }}>
                     {statusConfig[s].icon} {statusConfig[s].label}
                   </option>
                 ))}
@@ -230,7 +231,7 @@ export default function ApplicationDetailPage() {
 
           {/* Status badge */}
           <div className="mt-4">
-            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium text-white ${status.color}`}>
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${status.color}`} style={{ color: '#ffffff' }}>
               {status.icon} {status.label}
             </span>
           </div>
